@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WinFire Sample Report - SAMPLE-WORKSTATION</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #eee;
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1400px;
+        margin: auto;
+      }
+      .header {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(231, 76, 60, 0.3);
+      }
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+      .header p {
+        opacity: 0.9;
+        font-size: 1.1em;
+      }
+      .banner {
+        font-family: monospace;
+        white-space: pre;
+        font-size: 0.7em;
+        line-height: 1.2;
+        margin-bottom: 15px;
+      }
+      .threat-score {
+        background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        flex-wrap: wrap;
+      }
+      .score-circle {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 3em;
+        font-weight: bold;
+      }
+      .score-low {
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+      }
+      .score-medium {
+        background: linear-gradient(135deg, #f39c12, #e67e22);
+      }
+      .score-high {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+      }
+      .score-critical {
+        background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(155, 89, 182, 0.7);
+        }
+        50% {
+          box-shadow: 0 0 0 20px rgba(155, 89, 182, 0);
+        }
+      }
+      .score-details {
+        text-align: left;
+      }
+      .score-details h2 {
+        font-size: 1.8em;
+        margin-bottom: 10px;
+      }
+      .score-details p {
+        margin: 5px 0;
+        opacity: 0.8;
+      }
+      .section {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 25px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .section h2 {
+        color: #3498db;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #3498db;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .section h2::before {
+        content: "";
+        width: 5px;
+        height: 25px;
+        background: #3498db;
+        border-radius: 3px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+      }
+      th {
+        background: rgba(52, 152, 219, 0.3);
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+      }
+      td {
+        padding: 12px 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      tr:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+      }
+      .badge-success {
+        background: #27ae60;
+      }
+      .badge-warning {
+        background: #f39c12;
+      }
+      .badge-danger {
+        background: #e74c3c;
+      }
+      .badge-critical {
+        background: #9b59b6;
+        animation: pulse 2s infinite;
+      }
+      .badge-info {
+        background: #3498db;
+      }
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 25px;
+      }
+      .meta-card {
+        background: rgba(52, 152, 219, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #3498db;
+      }
+      .meta-card h3 {
+        font-size: 0.9em;
+        opacity: 0.7;
+        margin-bottom: 5px;
+      }
+      .meta-card p {
+        font-size: 1.2em;
+        font-weight: 600;
+      }
+      .findings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+      }
+      .finding-card {
+        background: rgba(231, 76, 60, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #e74c3c;
+      }
+      .finding-card.warning {
+        background: rgba(243, 156, 18, 0.1);
+        border-left-color: #f39c12;
+      }
+      .finding-card h4 {
+        margin-bottom: 10px;
+      }
+      .finding-card p {
+        font-size: 0.9em;
+        opacity: 0.8;
+      }
+      .footer {
+        text-align: center;
+        padding: 30px;
+        opacity: 0.6;
+        font-size: 0.9em;
+      }
+      .chart-container {
+        display: flex;
+        gap: 30px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin: 20px 0;
+      }
+      .pie-chart {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: conic-gradient(
+          #27ae60 0deg 180deg,
+          #f39c12 180deg 252deg,
+          #e74c3c 252deg 324deg,
+          #9b59b6 324deg 360deg
+        );
+        position: relative;
+      }
+      .pie-chart::after {
+        content: "";
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        background: #1a1a2e;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      .legend {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        justify-content: center;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="banner">
+          ██╗ ██╗██╗███╗ ██╗███████╗██╗██████╗ ███████╗ ██║ ██║██║████╗
+          ██║██╔════╝██║██╔══██╗██╔════╝ ██║ █╗ ██║██║██╔██╗ ██║█████╗
+          ██║██████╔╝█████╗ ╚███╔███╔╝██║██║ ╚████║██║ ██║██║ ██║███████╗
+          ╚══╝╚══╝ ╚═╝╚═╝ ╚═══╝╚═╝ ╚═╝╚═╝ ╚═╝╚══════╝
+        </div>
+        <h1>🔥 WinFire Forensic Report</h1>
+        <p>
+          Windows Forensic Incident Response Engine v2.0 | Executive Summary
+        </p>
+      </div>
+
+      <div class="threat-score">
+        <div class="score-circle score-high">
+          <span>35</span>
+          <small style="font-size: 0.3em">/ 100</small>
+        </div>
+        <div class="score-details">
+          <h2>🟠 HIGH RISK</h2>
+          <p><strong>System:</strong> SAMPLE-WORKSTATION</p>
+          <p><strong>Scan Date:</strong> 2026-01-29 10:30:45</p>
+          <p><strong>Duration:</strong> 00:04:32</p>
+          <p><strong>Total Findings:</strong> 7 issues requiring attention</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>📊 System Overview</h2>
+        <div class="meta-grid">
+          <div class="meta-card">
+            <h3>Computer Name</h3>
+            <p>SAMPLE-WORKSTATION</p>
+          </div>
+          <div class="meta-card">
+            <h3>Operating System</h3>
+            <p>Windows 11 Pro 23H2</p>
+          </div>
+          <div class="meta-card">
+            <h3>Last Boot</h3>
+            <p>2026-01-28 08:15:00</p>
+          </div>
+          <div class="meta-card">
+            <h3>Investigator</h3>
+            <p>John Doe</p>
+          </div>
+          <div class="meta-card">
+            <h3>Case Number</h3>
+            <p>INC-2026-0129</p>
+          </div>
+          <div class="meta-card">
+            <h3>Artifacts Collected</h3>
+            <p>42 files</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>⚠️ Critical Findings</h2>
+        <div class="findings-grid">
+          <div class="finding-card">
+            <h4>🔴 LOLBAS Activity Detected</h4>
+            <p>
+              certutil.exe executed with -urlcache flag, potentially downloading
+              malicious payload from external URL.
+            </p>
+            <p style="margin-top: 10px">
+              <span class="badge badge-danger">High Severity</span>
+            </p>
+          </div>
+          <div class="finding-card">
+            <h4>🔴 Credential Indicator Found</h4>
+            <p>
+              SAM database copy detected in user's Downloads folder. Possible
+              credential harvesting attempt.
+            </p>
+            <p style="margin-top: 10px">
+              <span class="badge badge-critical">Critical</span>
+            </p>
+          </div>
+          <div class="finding-card warning">
+            <h4>🟡 Suspicious Process Tree</h4>
+            <p>
+              WINWORD.EXE spawned powershell.exe with encoded command. Classic
+              macro-based attack pattern.
+            </p>
+            <p style="margin-top: 10px">
+              <span class="badge badge-warning">Medium Severity</span>
+            </p>
+          </div>
+          <div class="finding-card warning">
+            <h4>🟡 Defender Exclusion</h4>
+            <p>
+              Windows Defender exclusion found for C:\Users\Public\Downloads -
+              suspicious location.
+            </p>
+            <p style="margin-top: 10px">
+              <span class="badge badge-warning">Medium Severity</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>📋 Collection Summary</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Items Found</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>System Information</td>
+              <td>OS, hardware, and software inventory</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>1 system profile</td>
+            </tr>
+            <tr>
+              <td>User Accounts</td>
+              <td>Local users, groups, and profiles</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>5 accounts</td>
+            </tr>
+            <tr>
+              <td>Running Processes</td>
+              <td>Active processes with hashes</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>127 processes</td>
+            </tr>
+            <tr>
+              <td>LOLBAS Detection</td>
+              <td>Living-off-the-land binary abuse</td>
+              <td><span class="badge badge-danger">Warning</span></td>
+              <td>2 detections</td>
+            </tr>
+            <tr>
+              <td>Credential Indicators</td>
+              <td>Credential harvesting/dumping signs</td>
+              <td><span class="badge badge-critical">Critical</span></td>
+              <td>1 indicator</td>
+            </tr>
+            <tr>
+              <td>Network Connections</td>
+              <td>Active TCP/UDP connections</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>43 connections</td>
+            </tr>
+            <tr>
+              <td>Scheduled Tasks</td>
+              <td>Task scheduler entries</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>89 tasks</td>
+            </tr>
+            <tr>
+              <td>Registry Autoruns</td>
+              <td>Persistence mechanisms</td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td>3 suspicious</td>
+            </tr>
+            <tr>
+              <td>Event Logs</td>
+              <td>Security, System, Application</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>2,341 events</td>
+            </tr>
+            <tr>
+              <td>Browser Forensics</td>
+              <td>Chrome, Edge, Firefox profiles</td>
+              <td><span class="badge badge-success">Success</span></td>
+              <td>3 profiles</td>
+            </tr>
+            <tr>
+              <td>Threat Score</td>
+              <td>Overall system risk assessment</td>
+              <td><span class="badge badge-danger">High Risk</span></td>
+              <td>35/100</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>📈 Finding Distribution</h2>
+        <div class="chart-container">
+          <div class="pie-chart"></div>
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #27ae60"></div>
+              <span>Success (50%)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #f39c12"></div>
+              <span>Warning (20%)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #e74c3c"></div>
+              <span>High (20%)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #9b59b6"></div>
+              <span>Critical (10%)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🔐 Chain of Custody</h2>
+        <table>
+          <tr>
+            <th style="width: 200px">Field</th>
+            <th>Value</th>
+          </tr>
+          <tr>
+            <td>Case Number</td>
+            <td>INC-2026-0129</td>
+          </tr>
+          <tr>
+            <td>Investigator</td>
+            <td>John Doe</td>
+          </tr>
+          <tr>
+            <td>Purpose</td>
+            <td>Suspected malware infection investigation</td>
+          </tr>
+          <tr>
+            <td>Collection Started</td>
+            <td>2026-01-29 10:26:13</td>
+          </tr>
+          <tr>
+            <td>Collection Ended</td>
+            <td>2026-01-29 10:30:45</td>
+          </tr>
+          <tr>
+            <td>Hash Algorithm</td>
+            <td>SHA256</td>
+          </tr>
+          <tr>
+            <td>Total Files Hashed</td>
+            <td>42</td>
+          </tr>
+          <tr>
+            <td>Evidence Integrity</td>
+            <td><span class="badge badge-success">Verified</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>📁 Output Files</h2>
+        <table>
+          <tr>
+            <th>Directory</th>
+            <th>Contents</th>
+            <th>File Count</th>
+          </tr>
+          <tr>
+            <td>Raw_Data/</td>
+            <td>CSV and JSON exports</td>
+            <td>32 files</td>
+          </tr>
+          <tr>
+            <td>Collected_Artifacts/</td>
+            <td>Binary artifacts (Amcache, Prefetch, etc.)</td>
+            <td>8 files</td>
+          </tr>
+          <tr>
+            <td>Reports/</td>
+            <td>HTML summary, Chain of Custody, Hash Manifest</td>
+            <td>3 files</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="footer">
+        <p>WinFire v2.0 | Windows Forensic Incident Response Engine</p>
+        <p>https://github.com/Masriyan/WinFire</p>
+        <p style="margin-top: 15px">
+          ⚠️ This report is for authorized forensic investigations only. Verify
+          findings with additional tools.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
