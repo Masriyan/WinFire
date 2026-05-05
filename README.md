@@ -1,51 +1,35 @@
-# WinFire 🔥
+# WinFire
 
-**Windows Forensic Incident Response Engine v2.0.1**
+**Windows Forensic Incident Response Engine v2.0.2**
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%2FServer%202016%2B-green.svg)](https://www.microsoft.com/windows)
-[![Version](https://img.shields.io/badge/Version-2.0.1-brightgreen.svg)](https://github.com/Masriyan/WinFire)
+[![Version](https://img.shields.io/badge/Version-2.0.2-brightgreen.svg)](https://github.com/Masriyan/WinFire)
 
-> A comprehensive PowerShell tool for Windows digital forensics and incident response, designed to rapidly collect critical forensic artifacts for security investigations.
+> An enterprise-grade PowerShell tool for Windows digital forensics and incident response, designed to rapidly collect critical forensic artifacts for security investigations.
 
-```
-                          )  (      (
-                         (   ) )    )\ )
-                          ) ( (    (()/(
-                         (   ))\    /(_))
+## Table of Contents
 
-  ██╗    ██╗██╗███╗   ██╗███████╗██╗██████╗ ███████╗
-  ██║    ██║██║████╗  ██║██╔════╝██║██╔══██╗██╔════╝
-  ██║ █╗ ██║██║██╔██╗ ██║█████╗  ██║██████╔╝█████╗
-  ██║███╗██║██║██║╚██╗██║██╔══╝  ██║██╔══██╗██╔══╝
-  ╚███╔███╔╝██║██║ ╚████║██║     ██║██║  ██║███████╗
-   ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝
+- [Before You Use](#before-you-use)
+- [How WinFire Works](#how-winfire-works)
+- [What's New in v2.0.2](#whats-new-in-v202)
+- [Overview](#overview)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Collected Artifacts](#collected-artifacts)
+- [Output Structure](#output-structure)
+- [Examples](#examples)
+- [Legal Considerations](#legal-considerations)
+- [Contributing](#contributing)
+- [Security](#security)
+- [Changelog](#changelog)
+- [License](#license)
 
-  Windows Forensic Incident Response Engine v2.0.1
-```
+## Before You Use
 
-## 📋 Table of Contents
-
-- [⚠️ Before You Use](#️-before-you-use)
-- [What's New in v2.0](#-whats-new-in-v20)
-- [Overview](#-overview)
-- [Features](#-features)
-- [Prerequisites](#-prerequisites)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Collected Artifacts](#-collected-artifacts)
-- [Output Structure](#-output-structure)
-- [Examples](#-examples)
-- [Legal Considerations](#-legal-considerations)
-- [Contributing](#-contributing)
-- [Security](#-security)
-- [Changelog](#-changelog)
-- [License](#-license)
-
-## ⚠️ Before You Use
-
-> [!CAUTION]
 > **Antivirus/EDR Detection Warning**
 >
 > WinFire **will likely be detected** by antivirus software and EDR solutions. This is expected behavior because the script:
@@ -78,204 +62,138 @@ Set-MpPreference -DisableRealtimeMonitoring $true
 Set-MpPreference -DisableRealtimeMonitoring $false
 ```
 
-> [!IMPORTANT]
 > **Document any AV exclusions or modifications** in your chain of custody notes for forensic integrity.
 
-## 🔬 How WinFire Works
+## How WinFire Works
 
-### Execution Flowchart
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           WINFIRE EXECUTION FLOW                                │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-    ┌──────────────┐
-    │  START       │
-    │  WinFire.ps1 │
-    └──────┬───────┘
-           │
-           ▼
-    ┌──────────────────┐
-    │ Show Banner      │
-    └──────┬───────────┘
-           │
-           ▼
-    ┌──────────────────┐     ┌──────────────────┐
-    │ Check Admin      │────▶│ Display Warning  │
-    │ Privileges       │ No  │ & Exit           │
-    └──────┬───────────┘     └──────────────────┘
-           │ Yes
-           ▼
-    ┌──────────────────┐
-    │ Initialize Logs  │
-    │ Create Folders   │
-    └──────┬───────────┘
-           │
-           ▼
-    ┌──────────────────┐
-    │ Chain of Custody │
-    │ Documentation    │
-    └──────┬───────────┘
-           │
-           ▼
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║                        FORENSIC COLLECTION PHASE                         ║
-    ╟──────────────────────────────────────────────────────────────────────────╢
-    ║                                                                          ║
-    ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     ║
-    ║  │   System    │  │    User     │  │  Process &  │  │  Network    │     ║
-    ║  │    Info     │  │  Accounts   │  │  Services   │  │  Analysis   │     ║
-    ║  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     ║
-    ║                                                                          ║
-    ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     ║
-    ║  │ File System │  │  Registry   │  │ Event Logs  │  │  Browser    │     ║
-    ║  │  Artifacts  │  │  Analysis   │  │ Collection  │  │  Forensics  │     ║
-    ║  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     ║
-    ║                                                                          ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
-           │
-           ▼
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║                     THREAT DETECTION PHASE (v2.0+)                       ║
-    ╟──────────────────────────────────────────────────────────────────────────╢
-    ║                                                                          ║
-    ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     ║
-    ║  │   LOLBAS    │  │ Credential  │  │  Advanced   │  │   Threat    │     ║
-    ║  │ Detection   │  │ Indicators  │  │  Process    │  │   Score     │     ║
-    ║  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     ║
-    ║                                                                          ║
-    ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     ║
-    ║  │  Defender   │  │ PowerShell  │  │    RDP      │  │ Jump List & │     ║
-    ║  │ Exclusions  │  │   History   │  │  Analysis   │  │ LNK Files   │     ║
-    ║  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     ║
-    ║                                                                          ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
-           │
-           ▼
-    ┌──────────────────┐
-    │ Generate Reports │
-    │ • HTML Summary   │
-    │ • Hash Manifest  │
-    │ • Compress ZIP   │
-    └──────┬───────────┘
-           │
-           ▼
-    ┌──────────────┐
-    │     END      │
-    │  Complete!   │
-    └──────────────┘
-
-
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                         OUTPUT STRUCTURE                                │
-    ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                         │
-    │   WinFire_Results_20260129_103045/                                      │
-    │   ├── 📁 Raw_Data/                 ← CSV & JSON files                   │
-    │   │   ├── System_Information.csv                                        │
-    │   │   ├── Running_Processes.csv                                         │
-    │   │   ├── LOLBAS_Detection.csv     ← NEW v2.0                           │
-    │   │   ├── Threat_Score.csv         ← NEW v2.0                           │
-    │   │   └── ... (30+ files)                                               │
-    │   │                                                                     │
-    │   ├── 📁 Collected_Artifacts/      ← Binary artifacts                   │
-    │   │   ├── Amcache.hve                                                   │
-    │   │   ├── Prefetch/                                                     │
-    │   │   ├── Browser_Profiles/                                             │
-    │   │   └── PowerShell_History/      ← NEW v2.0                           │
-    │   │                                                                     │
-    │   ├── 📁 Reports/                  ← Analysis reports                   │
-    │   │   ├── WinFire_Executive_Summary.html                                │
-    │   │   ├── Chain_Of_Custody.json                                         │
-    │   │   └── Hash_Manifest.txt                                             │
-    │   │                                                                     │
-    │   └── 📄 WinFire_ExecutionLog.txt  ← Detailed log                       │
-    │                                                                         │
-    └─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Sample Report Output
-
-Below is an example of what the **Threat Score** output looks like:
+### Execution Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      SAMPLE: Threat_Score.csv                          │
-├────────────────┬────────────┬───────────────┬──────────────────────────┤
-│ ThreatScore    │ RiskLevel  │ TotalFindings │ CalculatedAt             │
-├────────────────┼────────────┼───────────────┼──────────────────────────┤
-│ 35             │ High       │ 7             │ 2026-01-29 10:30:45      │
-└────────────────┴────────────┴───────────────┴──────────────────────────┘
+START
+  |
+  v
+[Show Banner] -- Displays version, hostname, user, PS version, OS
+  |
+  v
+[Prerequisites Check] -- Validates PS >= 5.1, Windows OS
+  |  Fail --> EXIT (code 2)
+  v
+[Admin Privileges Check] -- Verifies Administrator role + forensic privileges
+  |  Fail --> Warning (non-fatal)
+  v
+[Initialize Output Directory] -- Creates timestamped results folder
+  |
+  v
+[Start Transcript] -- Full PowerShell transcript logging
+  |
+  v
+[Chain of Custody] -- Records case metadata, system context
+  |
+  v
+  +-- Phase 1/6: System Baseline
+  |     System Info, User Accounts, Process & Service Analysis
+  |
+  +-- Phase 2/6: Network Analysis
+  |     TCP/UDP Connections, Firewall, SMB, RDP
+  |
+  +-- Phase 3/6: File System & Registry
+  |     Amcache, Prefetch, SRUM, Autoruns, USB History
+  |
+  +-- Phase 4/6: Event Logs & Browser Forensics
+  |     Security/System/Application Logs, Chrome/Edge/Firefox
+  |
+  +-- Phase 5/6: Advanced Threat Detection
+  |     LOLBAS, Credentials, Defender Exclusions, Threat Score
+  |
+  +-- Phase 6/6: Report Generation
+  |     HTML Report, Hash Manifest, Evidence ZIP
+  |
+  v
+[Execution Summary] -- Status, duration, operations count, output path
+  |
+  v
+[Stop Transcript] --> EXIT (code 0 or 1)
+```
 
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    SAMPLE: LOLBAS_Detection.csv                        │
-├─────────────┬──────┬─────────────────────────────────┬─────────────────┤
-│ ProcessName │ PID  │ CommandLine                     │ Severity        │
-├─────────────┼──────┼─────────────────────────────────┼─────────────────┤
-│ certutil    │ 4521 │ certutil -urlcache -f http://...│ High            │
-│ mshta       │ 3842 │ mshta vbscript:Execute(...)     │ High            │
-└─────────────┴──────┴─────────────────────────────────┴─────────────────┘
+### Output Structure
 
-┌─────────────────────────────────────────────────────────────────────────┐
-│              SAMPLE: Credential_Indicators.csv                         │
-├────────────────────┬──────────┬─────────────────────────┬──────────────┤
-│ Type               │ EventId  │ Details                 │ Severity     │
-├────────────────────┼──────────┼─────────────────────────┼──────────────┤
-│ LSASS Access Event │ 4656     │ Potential cred dumping  │ Critical     │
-│ Registry Hive Copy │ N/A      │ SAM found in Downloads  │ Critical     │
-└────────────────────┴──────────┴─────────────────────────┴──────────────┘
+```
+WinFire_Results_YYYYMMDD_HHMMSS/
+|-- Raw_Data/                          # Structured data (30+ files)
+|   |-- System_Information.csv/.json
+|   |-- Running_Processes.csv/.json
+|   |-- LOLBAS_Detection.csv/.json
+|   |-- Credential_Indicators.csv/.json
+|   |-- Threat_Score.csv/.json
+|   +-- ...
+|
+|-- Collected_Artifacts/               # Binary artifacts
+|   |-- Browser_Profiles/
+|   |-- PowerShell_History/
+|   |-- JumpLists/
+|   |-- Amcache.hve
+|   |-- Prefetch/
+|   +-- Timeline/
+|
+|-- Reports/
+|   |-- WinFire_Executive_Summary.html
+|   |-- Chain_Of_Custody.json
+|   |-- Hash_Manifest.txt
+|   +-- Operation_Metrics.csv          # Per-operation timing
+|
+|-- WinFire_ExecutionLog.txt           # Detailed log
++-- WinFire_Transcript.txt            # Full PS transcript
 ```
 
 ### Risk Level Guide
 
-| Score  | Level           | Action Required                              |
-| ------ | --------------- | -------------------------------------------- |
-| 0-10   | 🟢 **Low**      | Routine findings, standard review            |
-| 11-30  | 🟡 **Medium**   | Notable findings, investigate warnings       |
-| 31-60  | 🟠 **High**     | Significant threats, prioritize analysis     |
-| 61-100 | 🔴 **Critical** | Active compromise likely, immediate response |
+| Score  | Level        | Action Required                              |
+| ------ | ------------ | -------------------------------------------- |
+| 0-10   | **Low**      | Routine findings, standard review            |
+| 11-30  | **Medium**   | Notable findings, investigate warnings       |
+| 31-60  | **High**     | Significant threats, prioritize analysis     |
+| 61-100 | **Critical** | Active compromise likely, immediate response |
 
-## 🚀 What's New in v2.0.1
+## What's New in v2.0.2
 
-### Major New Features
+### Enterprise-Grade Improvements
 
-| Feature                          | Description                                                                       |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| 🔍 **LOLBAS Detection**          | Detect Living-Off-The-Land Binary abuse (certutil, mshta, regsvr32, wmic, etc.)   |
-| 🔑 **Credential Indicators**     | Identify LSASS access, credential dumping tools, and SAM/SECURITY hive copies     |
-| 🛡️ **Defender Exclusions**       | Collect and flag suspicious Windows Defender exclusions                           |
-| 📜 **PowerShell History**        | Collect PSReadLine command history with suspicious pattern detection              |
-| 🖥️ **RDP Analysis**              | Analyze RDP sessions and connection history for lateral movement                  |
-| 🔄 **Advanced Process Analysis** | Detect suspicious parent-child relationships and processes from unusual locations |
-| 📊 **Threat Scoring**            | Automated system threat score (0-100) with risk level assessment                  |
-| 📁 **Jump List Analysis**        | Collect and analyze user activity from Jump Lists                                 |
-| 🔗 **LNK File Analysis**         | Parse shortcuts for suspicious targets and arguments                              |
+| Feature                      | Description                                                               |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| **Centralized Version**      | Single `$script:Version` constant, no more hardcoded strings              |
+| **Prerequisites Validation** | Checks PS version >= 5.1 and Windows OS before scan                       |
+| **Professional Banner**      | Shows hostname, user, privilege level, PS version, OS, start time         |
+| **Phased Execution**         | 6 named phases with clear log markers                                     |
+| **Operation Metrics**        | Per-operation timing via Stopwatch, exported to `Operation_Metrics.csv`   |
+| **Transcript Logging**       | Full PowerShell transcript to `WinFire_Transcript.txt`                    |
+| **Graceful Shutdown**        | Cancellation flag checked before each operation                           |
+| **Exit Codes**               | `0` = success, `1` = error, `2` = prerequisites failed                   |
+| **Execution Summary**        | Professional summary table with status, duration, operation counts        |
+| **Variable Scope Fix**       | Renamed `$script:OutputPath` to `$script:ResultsPath` (root cause fix)   |
+| **StrictMode Safety**        | All variables properly initialized before use                             |
+| **ASCII-Only Output**        | No Unicode characters that break Windows PowerShell 5.1 encoding          |
 
-### Bug Fixes (v2.0.1)
+### Bug Fixes (v2.0.2)
 
-- **Fixed banner parsing error**: Removed pipe `|` character that was misinterpreted as a PowerShell pipeline operator, causing `Author:` to be treated as a command
-- **Fixed null LogPath crash**: Added guard clause so `Log-WinFireMessage` handles early-startup calls before the output directory is created
-- **Fixed `.Privileges` property error**: Replaced non-existent `WindowsIdentity.Privileges` with reliable `whoami /priv` parsing for privilege checks
-- **Fixed `Test-WinFireAdminPrivileges` not recognized**: Added `[CmdletBinding()]` attribute so the function properly accepts common parameters under `Set-StrictMode -Version Latest`
-- **Fixed execution order**: Admin privilege check now runs before directory init, with graceful fallback for pre-init log writes
+- **Fixed variable scope collision**: `$script:OutputPath = $null` was overwriting the `$OutputPath` parameter
+- **Fixed StrictMode violation**: `$oldErrorActionPreference` moved before `try` block
+- **Added parameter validation**: `[ValidateNotNullOrEmpty()]` on `$BasePath`
+- **Wrapped admin check in try/catch**: Prevents cascading failures
+- **Replaced Unicode characters**: All box-drawing characters replaced with ASCII
+- **Renamed unapproved verb**: `Log-WinFireMessage` renamed to `Write-WinFireLog`
+- **Fixed automatic variable conflicts**: `$profile` -> `$userProfile`, `$event` -> `$logEvent`
+- **Removed unused variables**: `$dnsEntries`, `$persistenceKeys`, `$hash`
+- **Fixed null comparisons**: `$null` moved to left side of equality checks
 
-### Bug Fixes (v2.0.0)
+### Previous Releases
 
-- Fixed `Get-CService` typo (was causing service collection failures)
-- Fixed extension matching for suspicious file detection
-- Fixed `ProgramFiles(x86)` environment variable syntax
-- Improved service collection with both Get-Service and Win32_Service
+- **v2.0.1** - Startup bug fixes (banner parsing, privilege checks, logging init order)
+- **v2.0.0** - Major update with 10 new threat detection features
+- **v1.0.0** - Initial release with core forensic collection
 
-### UI Improvements
+## Overview
 
-- Enhanced ASCII art banner with animated flame effects
-- Added GitHub repository URL display
-- Improved version display and formatting (removed problematic pipe separator)
-
-## 🎯 Overview
-
-WinFire is an all-in-one PowerShell script designed for incident responders, digital forensics investigators, and cybersecurity professionals. It rapidly collects critical forensic artifacts from Windows systems, providing structured output in multiple formats (CSV, JSON, HTML) for immediate analysis or integration with other forensic tools.
+WinFire is an enterprise-grade PowerShell script designed for incident responders, digital forensics investigators, and cybersecurity professionals. It rapidly collects critical forensic artifacts from Windows systems, providing structured output in multiple formats (CSV, JSON, HTML) for immediate analysis or integration with other forensic tools.
 
 ### Key Capabilities
 
@@ -285,10 +203,11 @@ WinFire is an all-in-one PowerShell script designed for incident responders, dig
 - **Chain of Custody**: Maintains forensic integrity with proper documentation
 - **Multi-Format Output**: CSV, JSON, and HTML reports for various analysis workflows
 - **Evidence Integrity**: Cryptographic hashing ensures artifact authenticity
+- **Operation Metrics**: Per-task timing for performance analysis and audit trails
 
-## ✨ Features
+## Features
 
-### 🔍 **Threat Detection (NEW in v2.0)**
+### Threat Detection (v2.0+)
 
 - LOLBAS (Living-Off-The-Land Binary) abuse detection
 - Credential harvesting/dumping indicators
@@ -298,40 +217,40 @@ WinFire is an all-in-one PowerShell script designed for incident responders, dig
 - RDP lateral movement detection
 - Automated threat scoring (0-100)
 
-### 📊 **System Analysis**
+### System Analysis
 
 - Operating system and hardware information
 - Installed software inventory
 - Environment variables and system paths
 - Network configuration and interfaces
 
-### 👥 **User Activity Tracking**
+### User Activity Tracking
 
 - Local user accounts and group memberships
 - User profile artifacts and recent file access
 - Registry-based user activity (UserAssist, ShellBags)
 - Windows Timeline database collection
-- Jump List analysis (NEW)
-- LNK file parsing (NEW)
+- Jump List analysis
+- LNK file parsing
 
-### 🔄 **Process & Service Analysis**
+### Process & Service Analysis
 
 - Running processes with command lines and hashes
 - Windows services and startup configurations
 - Scheduled tasks enumeration
 - WMI event subscriptions (persistence mechanism)
-- Advanced process tree analysis (NEW)
+- Advanced process tree analysis
 
-### 🌐 **Network Forensics**
+### Network Forensics
 
 - Active network connections (TCP/UDP)
 - Listening ports and associated processes
 - Network shares and mapped drives
 - Windows Firewall rules
 - SMB sessions and open files
-- RDP connection history (NEW)
+- RDP connection history
 
-### 📁 **File System Artifacts**
+### File System Artifacts
 
 - Recently modified files in critical locations
 - Suspicious file detection based on extensions/attributes
@@ -341,7 +260,7 @@ WinFire is an all-in-one PowerShell script designed for incident responders, dig
 - **SRUM database** - System resource usage monitoring
 - **BITS jobs** - Background transfer service activity
 
-### 🔧 **Registry Analysis**
+### Registry Analysis
 
 - Autorun/persistence registry keys
 - USB device history
@@ -349,7 +268,7 @@ WinFire is an all-in-one PowerShell script designed for incident responders, dig
 - COM hijacking indicators
 - Network drive history
 
-### 📊 **Event Log Collection**
+### Event Log Collection
 
 - Security events (logons, privilege use, account changes)
 - System events (service changes, boot/shutdown)
@@ -357,33 +276,33 @@ WinFire is an all-in-one PowerShell script designed for incident responders, dig
 - PowerShell operational logs
 - Windows Defender detection events
 
-### 🌐 **Browser Forensics**
+### Browser Forensics
 
 - Chrome, Edge, and Firefox profile collection
 - Robust handling of locked browser files using RoboCopy
 - Cache and history databases for offline analysis
 
-### 🛡️ **Security Tool Detection**
+### Security Tool Detection
 
 - Windows Defender status and configuration
-- Defender exclusion analysis (NEW)
+- Defender exclusion analysis
 - Installed antivirus products detection
 - EDR/XDR agent identification
 - PowerShell logging configuration analysis
 
-### 🧠 **Memory Analysis Indicators**
+### Memory Analysis Indicators
 
 - Loaded DLL enumeration
 - Process hollowing indicators
 - DLL injection detection
 - Suspicious process identification
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### System Requirements
 
 - **Operating System**: Windows 10, Windows 11, Windows Server 2016+
-- **PowerShell**: Version 5.1 or higher
+- **PowerShell**: Version 5.1 or higher (validated at startup)
 - **Privileges**: Administrator rights required
 - **Disk Space**: Minimum 1GB free space (varies by system activity)
 
@@ -395,7 +314,7 @@ WinFire automatically checks for and benefits from these privileges:
 - `SeBackupPrivilege` - Read access to all files
 - `SeRestorePrivilege` - Restore file attributes
 
-## 🚀 Installation
+## Installation
 
 ### Method 1: Direct Download
 
@@ -412,17 +331,12 @@ cd WinFire
 
 ### Execution Policy
 
-You may need to adjust PowerShell execution policy:
-
 ```powershell
 # Temporarily allow script execution (run as Administrator)
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-
-# Or sign the script with your code signing certificate
-# Set-AuthenticodeSignature -FilePath "WinFire.ps1" -Certificate $cert
 ```
 
-## 🎮 Usage
+## Usage
 
 ### Basic Syntax
 
@@ -448,13 +362,19 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 | `-Quiet`          | Suppress most console output                          | False                       |
 | `-Help`           | Display detailed help information                     | False                       |
 
-## 📦 Collected Artifacts
+### Exit Codes
 
-### Critical Windows Forensic Artifacts
+| Code | Meaning                    |
+| ---- | -------------------------- |
+| 0    | Scan completed successfully |
+| 1    | Scan completed with errors  |
+| 2    | Prerequisites check failed  |
+
+## Collected Artifacts
 
 | Artifact Category         | Files/Registry Keys                                   | Forensic Value                     |
 | ------------------------- | ----------------------------------------------------- | ---------------------------------- |
-| **Execution Evidence**    | Amcache.hve, Prefetch/\*.pf                           | Program execution history          |
+| **Execution Evidence**    | Amcache.hve, Prefetch/*.pf                            | Program execution history          |
 | **User Activity**         | ActivitiesCache.db, UserAssist, RecentDocs, JumpLists | User behavior patterns             |
 | **Persistence**           | Run keys, Services, Scheduled Tasks                   | Malware persistence mechanisms     |
 | **Network Activity**      | Active connections, Firewall rules, RDP history       | Network communication evidence     |
@@ -463,60 +383,49 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 | **Credential Indicators** | LSASS events, SAM/SECURITY copies                     | Credential theft detection         |
 | **LOLBAS Activity**       | Process command lines                                 | Living-off-the-land detection      |
 
-### New v2.0 Output Files
-
-| File                                  | Description                               |
-| ------------------------------------- | ----------------------------------------- |
-| `Defender_Exclusions.csv/.json`       | Windows Defender exclusion analysis       |
-| `PowerShell_History.csv/.json`        | User PowerShell command history           |
-| `RDP_Analysis.csv/.json`              | RDP connections and session data          |
-| `LOLBAS_Detection.csv/.json`          | Living-off-the-land binary abuse findings |
-| `Credential_Indicators.csv/.json`     | Credential harvesting/dumping indicators  |
-| `Advanced_Process_Analysis.csv/.json` | Suspicious process relationships          |
-| `Threat_Score.csv/.json`              | Overall system threat assessment          |
-| `JumpList_Analysis.csv/.json`         | User activity from jump lists             |
-| `LNK_Analysis.csv/.json`              | Shortcut file analysis                    |
-
-## 📂 Output Structure
-
-After execution, WinFire creates a timestamped directory:
+## Output Structure
 
 ```
 WinFire_Results_YYYYMMDD_HHMMSS/
-├── Raw_Data/                          # Structured data files
-│   ├── System_Information.csv/.json
-│   ├── Running_Processes.csv/.json
-│   ├── LOLBAS_Detection.csv/.json          # NEW
-│   ├── Credential_Indicators.csv/.json     # NEW
-│   ├── Threat_Score.csv/.json              # NEW
-│   └── [Additional CSV/JSON files...]
-├── Collected_Artifacts/               # Binary artifacts
-│   ├── Browser_Profiles/
-│   ├── PowerShell_History/                 # NEW
-│   ├── JumpLists/                          # NEW
-│   ├── Amcache.hve
-│   ├── Prefetch/
-│   └── Timeline/
-├── Reports/
-│   ├── WinFire_Executive_Summary.html
-│   ├── Chain_Of_Custody.json
-│   └── Hash_Manifest.txt
-└── WinFire_ExecutionLog.txt
+|-- Raw_Data/
+|   |-- System_Information.csv/.json
+|   |-- Running_Processes.csv/.json
+|   |-- LOLBAS_Detection.csv/.json
+|   |-- Credential_Indicators.csv/.json
+|   |-- Threat_Score.csv/.json
+|   |-- Defender_Exclusions.csv/.json
+|   |-- PowerShell_History.csv/.json
+|   |-- RDP_Analysis.csv/.json
+|   |-- Advanced_Process_Analysis.csv/.json
+|   |-- JumpList_Analysis.csv/.json
+|   +-- LNK_Analysis.csv/.json
+|-- Collected_Artifacts/
+|   |-- Browser_Profiles/
+|   |-- PowerShell_History/
+|   |-- JumpLists/
+|   |-- Amcache.hve
+|   |-- Prefetch/
+|   +-- Timeline/
+|-- Reports/
+|   |-- WinFire_Executive_Summary.html
+|   |-- Chain_Of_Custody.json
+|   |-- Hash_Manifest.txt
+|   +-- Operation_Metrics.csv
+|-- WinFire_ExecutionLog.txt
++-- WinFire_Transcript.txt
 ```
 
-## 💡 Examples
+## Examples
 
 ### Quick Triage Scan
 
 ```powershell
-# Rapid scan for immediate threat assessment
 .\WinFire.ps1 -Quick -OutputPath "C:\Forensics\Case001" -CaseNumber "INC-2024-001" -Investigator "John Doe"
 ```
 
 ### Comprehensive Investigation
 
 ```powershell
-# Full forensic collection with case documentation
 .\WinFire.ps1 -Full -OutputPath "D:\Investigations\Malware_Analysis" `
               -CaseNumber "CASE-2024-MAL-005" `
               -Investigator "Jane Smith" `
@@ -527,7 +436,6 @@ WinFire_Results_YYYYMMDD_HHMMSS/
 ### Threat Hunting Focus
 
 ```powershell
-# Full scan with focus on reviewing threat score
 .\WinFire.ps1 -Full -OutputPath "C:\ThreatHunting" `
               -CaseNumber "HUNT-2024-001" `
               -Purpose "Proactive threat hunting assessment"
@@ -537,11 +445,10 @@ WinFire_Results_YYYYMMDD_HHMMSS/
 ### Stealth Collection
 
 ```powershell
-# Minimal console output for covert collection
 .\WinFire.ps1 -Quick -Quiet -OutputPath "C:\Temp\Scan" -CaseNumber "STEALTH-001"
 ```
 
-## ⚖️ Legal Considerations
+## Legal Considerations
 
 ### Authorization Requirements
 
@@ -556,131 +463,62 @@ WinFire_Results_YYYYMMDD_HHMMSS/
 - Chain of custody documentation supports legal admissibility
 - All collection activities are logged with timestamps
 - Hash verification ensures evidence integrity
+- Full PowerShell transcript provides audit trail
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions to improve WinFire! Here's how you can help:
-
-### Reporting Issues
-
-1. Check existing [issues](https://github.com/Masriyan/WinFire/issues) first
-2. Provide detailed description of the problem
-3. Include system information and error messages
-4. Specify WinFire version and PowerShell version
-
-### Feature Requests
-
-1. Open an [issue](https://github.com/Masriyan/WinFire/issues/new) with the enhancement label
-2. Describe the forensic value of the proposed feature
-3. Provide use case examples
-
-### Code Contributions
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-artifact`)
-3. Follow existing code style and patterns
-4. Add appropriate error handling with `Invoke-WinFireSafeOperation`
-5. Test thoroughly on different Windows versions
-6. Update documentation as needed
-7. Open a Pull Request
+We welcome contributions to improve WinFire! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Development Guidelines
 
 - Maintain compatibility with PowerShell 5.1+
-- Follow existing naming conventions (`Get-WinFire*`)
-- Include comprehensive error handling
-- Add appropriate logging with `Log-WinFireMessage`
+- Follow existing naming conventions (`Get-WinFire*`, `Write-WinFireLog`)
+- Include comprehensive error handling with `Invoke-WinFireSafeOperation`
+- Use `[CmdletBinding()]` on all functions
+- Avoid Unicode characters in string literals (ASCII only)
+- Use `$script:Version` constant instead of hardcoding version strings
 
-## 📈 Roadmap
+## Roadmap
 
 ### Planned Features
 
-- [ ] **Memory dump collection** for critical processes
-- [ ] **USN Journal analysis** for file system timeline
-- [ ] **ETW log collection** for advanced event tracing
-- [ ] **Cloud artifact collection** (OneDrive, Office 365)
-- [ ] **API integration** with threat intelligence platforms
-- [ ] **PowerShell 7 Core** compatibility
+- [ ] Memory dump collection for critical processes
+- [ ] USN Journal analysis for file system timeline
+- [ ] ETW log collection for advanced event tracing
+- [ ] Cloud artifact collection (OneDrive, Office 365)
+- [ ] API integration with threat intelligence platforms
+- [ ] PowerShell 7 Core compatibility
 
-### Version History
+## Support
 
-- **v2.0.1** - Critical startup bug fixes (banner parsing, privilege checks, logging init order)
-- **v2.0.0** - Major update with 10 new threat detection features, bug fixes, and UI improvements
-- **v1.0.0** - Initial release with core forensic collection capabilities
+- **Bug Reports**: [GitHub Issues](https://github.com/Masriyan/WinFire/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Masriyan/WinFire/discussions)
+- **Contact**: [sudo3rs@protonmail.com](mailto:sudo3rs@protonmail.com)
 
-## 📞 Support
-
-### Community Support
-
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/Masriyan/WinFire/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/Masriyan/WinFire/discussions)
-- 📧 **Contact**: [sudo3rs@protonmail.com](mailto:sudo3rs@protonmail.com)
-
-## 🏆 Acknowledgments
-
-### Contributors
+## Acknowledgments
 
 - **sudo3rs** - Original author and maintainer
 
-### Inspiration
+WinFire draws inspiration from established forensic tools: KAPE (Eric Zimmerman), CyLR (Alan Orlikoski), Invoke-LiveResponse (Matt Green), PowerForensics (Jared Atkinson).
 
-WinFire draws inspiration from established forensic tools:
-
-- **KAPE** by Eric Zimmerman
-- **CyLR** by Alan Orlikoski
-- **Invoke-LiveResponse** by Matt Green
-- **PowerForensics** by Jared Atkinson
-
-## 📜 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```
-MIT License
+## Security
 
-Copyright (c) 2024-2026 sudo3rs
+For security policy and vulnerability reporting, see [SECURITY.md](SECURITY.md).
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## Changelog
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+For detailed version history, see [CHANGELOG.md](CHANGELOG.md).
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-```
+## Disclaimer
 
-## 🔒 Security
-
-For security policy, vulnerability reporting, and important notices about antivirus detection, please see [SECURITY.md](SECURITY.md).
-
-## 📝 Changelog
-
-For detailed version history and changes, please see [CHANGELOG.md](CHANGELOG.md).
-
-## ⚠️ Disclaimer
-
-**IMPORTANT**: WinFire is designed for legitimate digital forensics, incident response, and cybersecurity investigations. Users are responsible for:
-
-- **Legal Compliance**: Ensuring proper authorization before system analysis
-- **Scope Adherence**: Operating within authorized investigation boundaries
-- **Data Protection**: Following applicable privacy and data protection laws
-- **Professional Use**: Using the tool only for lawful security purposes
-
-### Technical Limitations
-
-- Requires **Administrator privileges** for complete artifact collection
-- Some artifacts may be **inaccessible** due to system protections
-- **Anti-malware software** may flag or block certain collection activities
-- Results should be **validated** with additional forensic tools
+WinFire is intended exclusively for authorized digital forensics, incident response, and cybersecurity investigations. Users are responsible for legal compliance, scope adherence, data protection, and professional use. See [SECURITY.md](SECURITY.md) for full details.
 
 ---
 
-**🔥 Happy Hunting! 🔥**
+**Repository**: [https://github.com/Masriyan/WinFire](https://github.com/Masriyan/WinFire)
 
-_WinFire v2.0.1 - Illuminating the path to digital truth_
+_WinFire v2.0.2 - Enterprise-grade forensic artifact collection for Windows_

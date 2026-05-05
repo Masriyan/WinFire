@@ -1,10 +1,10 @@
-# region CmdletBinding and Parameters (MUST BE AT THE VERY TOP OF THE SCRIPT FILE)
-[CmdletBinding(DefaultParameterSetName='Default')]
+﻿# region CmdletBinding and Parameters (MUST BE AT THE VERY TOP OF THE SCRIPT FILE)
+[CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
-    [Parameter(ParameterSetName='Default')]
+    [Parameter(ParameterSetName = 'Default')]
     [switch]$Quick,
 
-    [Parameter(ParameterSetName='Default')]
+    [Parameter(ParameterSetName = 'Default')]
     [switch]$Full,
 
     [string]$OutputPath = (Get-Location).Path,
@@ -17,16 +17,16 @@ param(
 
     [switch]$Quiet,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$CaseNumber,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$Investigator,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$Purpose,
 
-    [Parameter(Mandatory=$true, ParameterSetName='Help')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Help')]
     [switch]$Help
 )
 # endregion
@@ -90,23 +90,20 @@ param(
 
 .NOTES
     WinFire (Windows Forensic Incident Response Engine)
-    Version: 2.0
+    Version: 2.0.2
     Author: sudo3rs
-    Description: Comprehensive Windows Digital Forensics and Incident Response Tool
+    Description: Enterprise-grade Windows Digital Forensics and Incident Response Tool
     Compatible: Windows 10/11/Server 2016+
     Requires: PowerShell 5.1+ with Administrator privileges
-    License: MIT License (or specify your chosen open-source license)
-    Disclaimer: This script is for educational and forensic purposes. Use responsibly.
+    Repository: https://github.com/Masriyan/WinFire
+    License: MIT License
+    Disclaimer: This tool is intended exclusively for authorized forensic investigations.
 #>
 
-#region Header and Metadata
-
 # WinFire (Windows Forensic Incident Response Engine)
-# Version: 2.0
+# Version: 2.0.2
 # Author: sudo3rs
-# Description: Comprehensive Windows Digital Forensics and Incident Response Tool
-# Compatible: Windows 10/11/Server 2016+
-# Requires: PowerShell 5.1+ with Administrator privileges
+# Repository: https://github.com/Masriyan/WinFire
 
 #endregion
 
@@ -118,15 +115,28 @@ Set-StrictMode -Version Latest
 # Error handling preference: continue on non-terminating errors, but log them
 $ErrorActionPreference = 'Continue'
 
-# Global variables for output paths
-$script:ResultsPath      = $null
+# -- Version & Metadata ----------------------------------------------
+$script:Version         = '2.0.2'
+$script:BuildDate       = '2026-05-05'
+$script:MinPSVersion    = [version]'5.1'
+
+# -- Runtime State ----------------------------------------------------
+$script:ResultsPath     = $null
 $script:LogPath         = $null
-$script:SummaryReport   = @() # Stores key findings for the HTML report
-$script:CollectedFiles  = @() # Stores info about collected files for hash manifest
+$script:SummaryReport   = @()
+$script:CollectedFiles  = @()
 $script:StartTime       = Get-Date
 $script:ProgressCounter = 0
-$script:TotalTasks      = 40 # Approximate number of major tasks for progress bar (v2.0 - added 10 new functions)
+$script:TotalTasks      = 40
 $script:ChainOfCustody  = $null
+$script:ExitCode        = 0
+$script:OperationMetrics = [System.Collections.ArrayList]::new()
+$script:CancelRequested = $false
+
+# -- Graceful Shutdown Handler ----------------------------------------
+$null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+    $script:CancelRequested = $true
+} -ErrorAction SilentlyContinue
 
 #endregion
 
@@ -135,41 +145,51 @@ $script:ChainOfCustody  = $null
 Function Show-WinFireBanner {
     <#
     .SYNOPSIS
-        Displays the WinFire ASCII art banner with flame effects.
+        Displays the WinFire enterprise banner with runtime context.
     #>
     param()
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $privLevel = if ($isAdmin) { "Administrator" } else { "Standard User" }
+
     Write-Host ""
-    Write-Host "                          )  (      (     " -ForegroundColor DarkYellow
-    Write-Host "                         (   ) )    )\ )  " -ForegroundColor Yellow
-    Write-Host "                          ) ( (    (()/(  " -ForegroundColor Red
-    Write-Host "                         (   ))\    /(_)) " -ForegroundColor DarkRed
+    Write-Host "  WinFire" -ForegroundColor Red -NoNewline
+    Write-Host " v$($script:Version)" -ForegroundColor Green -NoNewline
+    Write-Host "  |  Windows Forensic Incident Response Engine" -ForegroundColor DarkGray
+    Write-Host "  https://github.com/Masriyan/WinFire" -ForegroundColor DarkCyan
     Write-Host ""
-    Write-Host "  ██╗    ██╗██╗███╗   ██╗███████╗██╗██████╗ ███████╗" -ForegroundColor Red
-    Write-Host "  ██║    ██║██║████╗  ██║██╔════╝██║██╔══██╗██╔════╝" -ForegroundColor Red
-    Write-Host "  ██║ █╗ ██║██║██╔██╗ ██║█████╗  ██║██████╔╝█████╗  " -ForegroundColor DarkRed
-    Write-Host "  ██║███╗██║██║██║╚██╗██║██╔══╝  ██║██╔══██╗██╔══╝  " -ForegroundColor DarkRed
-    Write-Host "  ╚███╔███╔╝██║██║ ╚████║██║     ██║██║  ██║███████╗" -ForegroundColor Red
-    Write-Host "   ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝" -ForegroundColor Red
+    Write-Host "  Host       : $($env:COMPUTERNAME)" -ForegroundColor Gray
+    Write-Host "  User       : $($env:USERDOMAIN)\$($env:USERNAME) ($privLevel)" -ForegroundColor Gray
+    Write-Host "  PS Version : $($PSVersionTable.PSVersion)" -ForegroundColor Gray
+    Write-Host "  OS         : $([System.Environment]::OSVersion.VersionString)" -ForegroundColor Gray
+    Write-Host "  Started    : $($script:StartTime.ToString('yyyy-MM-dd HH:mm:ss zzz'))" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor DarkGray
-    Write-Host "  ║   " -ForegroundColor DarkGray -NoNewline
-    Write-Host "Windows Forensic Incident Response Engine" -ForegroundColor Cyan -NoNewline
-    Write-Host "              ║" -ForegroundColor DarkGray
-    Write-Host "  ║   " -ForegroundColor DarkGray -NoNewline
-    Write-Host "Version: 2.0  " -ForegroundColor Green -NoNewline
-    Write-Host "Author: " -ForegroundColor DarkGray -NoNewline
-    Write-Host "sudo3rs" -ForegroundColor Yellow -NoNewline
-    Write-Host "                           ║" -ForegroundColor DarkGray
-    Write-Host "  ║   " -ForegroundColor DarkGray -NoNewline
-    Write-Host "https://github.com/Masriyan/WinFire" -ForegroundColor Blue -NoNewline
-    Write-Host "                       ║" -ForegroundColor DarkGray
-    Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor DarkGray
-    Write-Host ""
-    Write-Host "  [" -ForegroundColor White -NoNewline
-    Write-Host "!" -ForegroundColor Yellow -NoNewline
-    Write-Host "] " -ForegroundColor White -NoNewline
-    Write-Host "Comprehensive DFIR artifact collection for Windows systems" -ForegroundColor Gray
-    Write-Host ""
+}
+
+Function Test-WinFirePrerequisites {
+    <#
+    .SYNOPSIS
+        Validates that all runtime prerequisites are met before scan execution.
+    .OUTPUTS
+        Returns $true if all prerequisites pass, $false otherwise.
+    #>
+    [CmdletBinding()]
+    param([switch]$Quiet)
+
+    $passed = $true
+
+    # PowerShell version check
+    if ($PSVersionTable.PSVersion -lt $script:MinPSVersion) {
+        Write-WinFireLog -Type ERROR -Message "PowerShell $($script:MinPSVersion) or later is required. Current: $($PSVersionTable.PSVersion)" -Quiet:$Quiet
+        $passed = $false
+    }
+
+    # OS platform check
+    if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
+        Write-WinFireLog -Type ERROR -Message "WinFire requires Windows. Detected non-Windows platform." -Quiet:$Quiet
+        $passed = $false
+    }
+
+    return $passed
 }
 
 Function Test-WinFireAdminPrivileges {
@@ -182,11 +202,11 @@ Function Test-WinFireAdminPrivileges {
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
         Write-Error "WinFire requires Administrator privileges to run. Please run PowerShell as Administrator."
-        Log-WinFireMessage -Type ERROR -Message "Script started without Administrator privileges. Exiting."
+        Write-WinFireLog -Type ERROR -Message "Script started without Administrator privileges. Exiting."
         exit 1
     }
 
-    Log-WinFireMessage -Type INFO -Message "Administrator privileges confirmed." -Quiet:$Quiet
+    Write-WinFireLog -Type INFO -Message "Administrator privileges confirmed." -Quiet:$Quiet
 
     # Additional check for specific privileges needed for forensics (SeDebugPrivilege, SeBackupPrivilege, SeRestorePrivilege)
     # Note: PowerShell can't directly enable these without external modules or P/Invoke.
@@ -201,27 +221,29 @@ Function Test-WinFireAdminPrivileges {
                 if ($whoamiOutput -notmatch "$priv\s+.*Enabled") {
                     $missingPrivileges += $priv
                 }
-            } else {
+            }
+            else {
                 $missingPrivileges += $priv
             }
         }
     }
     catch {
-        Log-WinFireMessage -Type WARN -Message "Could not check privileges via whoami: $_" -Quiet:$Quiet
+        Write-WinFireLog -Type WARN -Message "Could not check privileges via whoami: $_" -Quiet:$Quiet
     }
 
     if ($missingPrivileges.Count -gt 0) {
-        Log-WinFireMessage -Type WARN -Message "The following important forensic privileges appear to be missing or disabled: $($missingPrivileges -join ', '). Some operations may fail." -Quiet:$Quiet
+        Write-WinFireLog -Type WARN -Message "The following important forensic privileges appear to be missing or disabled: $($missingPrivileges -join ', '). Some operations may fail." -Quiet:$Quiet
         Get-WinFireSummaryEntry -Category "Privileges" -Description "Missing or disabled required forensic privileges." -Status "Warning" -Details "Missing: $($missingPrivileges -join ', ')"
-    } else {
-        Log-WinFireMessage -Type INFO -Message "All essential forensic privileges appear to be enabled." -Quiet:$Quiet
+    }
+    else {
+        Write-WinFireLog -Type INFO -Message "All essential forensic privileges appear to be enabled." -Quiet:$Quiet
         Get-WinFireSummaryEntry -Category "Privileges" -Description "All essential forensic privileges enabled." -Status "Success" -Details "SeDebugPrivilege, SeBackupPrivilege, SeRestorePrivilege"
     }
 
     return $true
 }
 
-Function Log-WinFireMessage {
+Function Write-WinFireLog {
     <#
     .SYNOPSIS
         Logs messages to a file and optionally to the console.
@@ -258,7 +280,8 @@ Function Log-WinFireMessage {
         'WARN' { Write-Warning "$Message" }
         'ERROR' { Write-Error "$Message" }
         'SUCCESS' { Write-Host "$Message" -ForegroundColor Green }
-        'PROGRESS' { # Do not write progress to console via this function, handled by Set-WinFireProgress
+        'PROGRESS' {
+            # Do not write progress to console via this function, handled by Set-WinFireProgress
             if (-not $Quiet) { Write-Host "$Message" -ForegroundColor DarkGray }
         }
     }
@@ -272,9 +295,10 @@ Function New-WinFireOutputDirectory {
         The base path where the output directory will be created.
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
-        [string]$BasePath
+        [string]$BasePath,
+        [switch]$Quiet
     )
     $timestampDir = (Get-Date -Format "yyyyMMdd_HHmmss")
     $script:ResultsPath = Join-Path -Path $BasePath -ChildPath "WinFire_Results_$timestampDir"
@@ -285,8 +309,8 @@ Function New-WinFireOutputDirectory {
         New-Item -ItemType Directory -Path (Join-Path $script:ResultsPath "Raw_Data") -ErrorAction Stop | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $script:ResultsPath "Collected_Artifacts") -ErrorAction Stop | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $script:ResultsPath "Reports") -ErrorAction Stop | Out-Null
-        Log-WinFireMessage -Type INFO -Message "Output directory created: $($script:ResultsPath)" -Quiet:$Quiet
-        Log-WinFireMessage -Type INFO -Message "Logging to: $($script:LogPath)" -Quiet:$Quiet
+        Write-WinFireLog -Type INFO -Message "Output directory created: $($script:ResultsPath)" -Quiet:$Quiet
+        Write-WinFireLog -Type INFO -Message "Logging to: $($script:LogPath)" -Quiet:$Quiet
     }
     catch {
         Write-Error "Failed to create output directory: $_"
@@ -304,9 +328,9 @@ Function Get-FileHashSafe {
         The hashing algorithm to use (MD5, SHA1, SHA256).
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$FilePath,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [ValidateSet('MD5', 'SHA1', 'SHA256')]
         [string]$Algorithm
     )
@@ -316,7 +340,7 @@ Function Get-FileHashSafe {
         }
     }
     catch {
-        Log-WinFireMessage -Type WARN -Message "Could not hash file '$FilePath': $_" -Quiet:$Quiet
+        Write-WinFireLog -Type WARN -Message "Could not hash file '$FilePath': $_" -Quiet:$Quiet
     }
     return "N/A"
 }
@@ -333,9 +357,9 @@ Function Save-WinFireData {
         If set to $true, suppresses console output for INFO messages.
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $Data,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$FileName,
         [switch]$Quiet
     )
@@ -345,16 +369,17 @@ Function Save-WinFireData {
     if ($Data -and $Data.Count -gt 0) {
         try {
             $Data | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Force -ErrorAction Stop
-            Log-WinFireMessage -Type INFO -Message "Data saved to: $csvPath" -Quiet:$Quiet
+            Write-WinFireLog -Type INFO -Message "Data saved to: $csvPath" -Quiet:$Quiet
 
             $Data | ConvertTo-Json -Depth 10 | Set-Content -Path $jsonPath -Encoding UTF8 -Force -ErrorAction Stop
-            Log-WinFireMessage -Type INFO -Message "Data saved to: $jsonPath" -Quiet:$Quiet
+            Write-WinFireLog -Type INFO -Message "Data saved to: $jsonPath" -Quiet:$Quiet
         }
         catch {
-            Log-WinFireMessage -Type ERROR -Message "Failed to save $FileName data: $_" -Quiet:$Quiet
+            Write-WinFireLog -Type ERROR -Message "Failed to save $FileName data: $_" -Quiet:$Quiet
         }
-    } else {
-        Log-WinFireMessage -Type INFO -Message "No data collected for $FileName." -Quiet:$Quiet
+    }
+    else {
+        Write-WinFireLog -Type INFO -Message "No data collected for $FileName." -Quiet:$Quiet
     }
 }
 
@@ -410,7 +435,7 @@ Function Get-WinFireSummaryEntry {
 Function Invoke-WinFireSafeOperation {
     <#
     .SYNOPSIS
-        A wrapper function to execute an operation with comprehensive error handling and logging.
+        A wrapper function to execute an operation with comprehensive error handling, timing, and logging.
     .PARAMETER Operation
         The scriptblock containing the operation to execute.
     .PARAMETER OperationName
@@ -419,40 +444,56 @@ Function Invoke-WinFireSafeOperation {
         If set to $true, suppresses console output for INFO messages.
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [scriptblock]$Operation,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$OperationName,
         [switch]$Quiet
     )
 
-    Log-WinFireMessage -Type INFO -Message "Starting '$OperationName'..." -Quiet:$Quiet
+    # Check for cancellation request
+    if ($script:CancelRequested) {
+        Write-WinFireLog -Type WARN -Message "Cancellation requested. Skipping '$OperationName'." -Quiet:$Quiet
+        return $null
+    }
+
+    Write-WinFireLog -Type INFO -Message "Starting '$OperationName'..." -Quiet:$Quiet
     $result = $null
+    $opStatus = 'Success'
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $oldErrorActionPreference = $ErrorActionPreference
     try {
-        # Temporarily change ErrorActionPreference for the scriptblock to capture specific errors
         $ErrorActionPreference = 'Stop'
         $result = & $Operation
-        $ErrorActionPreference = $oldErrorActionPreference # Restore original preference
+        $ErrorActionPreference = $oldErrorActionPreference
 
-        Log-WinFireMessage -Type SUCCESS -Message "'$OperationName' completed successfully." -Quiet:$Quiet
+        $sw.Stop()
+        Write-WinFireLog -Type SUCCESS -Message "'$OperationName' completed in $($sw.Elapsed.TotalSeconds.ToString('F1'))s." -Quiet:$Quiet
         return $result
     }
     catch [System.UnauthorizedAccessException] {
-        Log-WinFireMessage -Type WARN -Message "'$OperationName' failed: Access Denied - $_" -Quiet:$Quiet
+        $opStatus = 'AccessDenied'
+        Write-WinFireLog -Type WARN -Message "'$OperationName' failed: Access Denied - $_" -Quiet:$Quiet
         Get-WinFireSummaryEntry -Category "Error: $OperationName" -Description "Access Denied during operation." -Status "Failed" -Details "$_"
     }
     catch [System.IO.IOException] {
-        Log-WinFireMessage -Type WARN -Message "'$OperationName' failed: IO Error (file locked/in use) - $_" -Quiet:$Quiet
+        $opStatus = 'IOError'
+        Write-WinFireLog -Type WARN -Message "'$OperationName' failed: IO Error (file locked/in use) - $_" -Quiet:$Quiet
         Get-WinFireSummaryEntry -Category "Error: $OperationName" -Description "IO Error during operation." -Status "Warning" -Details "$_"
     }
     catch {
-        Log-WinFireMessage -Type ERROR -Message "'$OperationName' failed: $_" -Quiet:$Quiet
+        $opStatus = 'Failed'
+        Write-WinFireLog -Type ERROR -Message "'$OperationName' failed: $_" -Quiet:$Quiet
         Get-WinFireSummaryEntry -Category "Error: $OperationName" -Description "Unexpected error during operation." -Status "Failed" -Details "$_"
     }
     finally {
-        # Ensure ErrorActionPreference is restored even if an error occurred before explicit restoration
+        $sw.Stop()
         $ErrorActionPreference = $oldErrorActionPreference
+        $null = $script:OperationMetrics.Add([PSCustomObject]@{
+            Operation = $OperationName
+            Status    = $opStatus
+            Elapsed   = $sw.Elapsed
+        })
     }
     return $null
 }
@@ -479,7 +520,7 @@ Function Initialize-WinFireChainOfCustody {
 
     $systemUptime = Invoke-WinFireSafeOperation -Operation {
         (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
-    } -OperationName "Get System Uptime" -Quiet:$Quiet | ForEach-Object { [System.Management.ManagementDateTimeConverter]::ToDateTime($_) }
+    } -OperationName "Get System Uptime" -Quiet:$Quiet
 
     $kernelHash = Invoke-WinFireSafeOperation -Operation {
         Get-FileHash -Path "$env:SystemRoot\System32\ntoskrnl.exe" -Algorithm SHA256
@@ -493,9 +534,9 @@ Function Initialize-WinFireChainOfCustody {
         UTCTime         = $utcTime
         ComputerName    = $env:COMPUTERNAME
         UserName        = $env:USERNAME
-        SystemUptime    = $systemUptime.ToString('yyyy-MM-dd HH:mm:ss')
+        SystemUptime    = $(if ($null -ne $systemUptime) { $systemUptime.ToString('yyyy-MM-dd HH:mm:ss') } else { 'N/A' })
         NtOsKrnlHash    = $kernelHash
-        WinFireVersion  = "2.0"
+        WinFireVersion  = $script:Version
         ScanStartTime   = $script:StartTime.ToString('yyyy-MM-dd HH:mm:ss')
         OutputDirectory = $script:ResultsPath
         ExecutionLog    = $script:LogPath
@@ -503,7 +544,7 @@ Function Initialize-WinFireChainOfCustody {
 
     $custodyInfoJson = $script:ChainOfCustody | ConvertTo-Json -Depth 5 -Compress
     Set-Content -Path (Join-Path $script:ResultsPath "Reports\Chain_Of_Custody.json") -Value $custodyInfoJson -Encoding UTF8 -Force
-    Log-WinFireMessage -Type INFO -Message "Chain of Custody information initialized and saved." -Quiet:$Quiet
+    Write-WinFireLog -Type INFO -Message "Chain of Custody information initialized and saved." -Quiet:$Quiet
     Get-WinFireSummaryEntry -Category "Chain of Custody" -Description "Basic chain of custody information collected." -Status "Success" -Details "Case: $CaseNumber, Investigator: $Investigator"
 }
 
@@ -527,7 +568,7 @@ Function Get-WinFireSystemInfo {
     $systemInfo += Invoke-WinFireSafeOperation -Operation {
         [PSCustomObject]@{
             Category = "OS_Info"
-            Data     = (Get-CimInstance Win32_OperatingSystem | Select-Object -Property Caption, Version, BuildNumber, OSArchitecture, @{Name='InstallDate'; Expression={$_.InstallDate.ToString('yyyy-MM-dd HH:mm:ss')}}, LastBootUpTime, @{Name='LastBootUpTimeReadable'; Expression={[System.Management.ManagementDateTimeConverter]::ToDateTime($_.LastBootUpTime)}}, SystemDirectory, FreePhysicalMemory, TotalPhysicalMemory, Locale) | ConvertTo-Json -Compress
+            Data     = (Get-CimInstance Win32_OperatingSystem | Select-Object -Property Caption, Version, BuildNumber, OSArchitecture, @{Name = 'InstallDate'; Expression = { $_.InstallDate.ToString('yyyy-MM-dd HH:mm:ss') } }, LastBootUpTime, @{Name = 'LastBootUpTimeReadable'; Expression = { $_.LastBootUpTime.ToString('yyyy-MM-dd HH:mm:ss') } }, SystemDirectory, FreePhysicalMemory, TotalPhysicalMemory, Locale) | ConvertTo-Json -Compress
         }
     } -OperationName "Collect OS Info" -Quiet:$Quiet
 
@@ -591,7 +632,7 @@ Function Get-WinFireSystemInfo {
     $installedSoftwareReg = Invoke-WinFireSafeOperation -Operation {
         $soft = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation
         $soft += Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation
-        $soft | Where-Object {$_.DisplayName -ne $null} | Select-Object -Unique DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation
+        $soft | Where-Object { $null -ne $_.DisplayName } | Select-Object -Unique DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation
     } -OperationName "Collect Installed Software" -Quiet:$Quiet
     if ($installedSoftwareReg) {
         $systemInfo += [PSCustomObject]@{
@@ -611,7 +652,7 @@ Function Get-WinFireSystemInfo {
     }
 
     $systemPaths = Invoke-WinFireSafeOperation -Operation {
-        $env:Path.Split(';') | ForEach-Object { [PSCustomObject]@{Path = $_} }
+        $env:Path.Split(';') | ForEach-Object { [PSCustomObject]@{Path = $_ } }
     } -OperationName "Collect System Paths" -Quiet:$Quiet
     if ($systemPaths) {
         $systemInfo += [PSCustomObject]@{
@@ -640,7 +681,7 @@ Function Get-WinFireUserAccounts {
     $userProfileArtifacts = @()
 
     $localUsers = Invoke-WinFireSafeOperation -Operation {
-        Get-LocalUser | Select-Object Name, Enabled, Description, LastLogon, PasswordLastSet, PasswordRequired, @{Name='IsAdmin'; Expression={(New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole("Administrators")}}, SID
+        Get-LocalUser | Select-Object Name, Enabled, Description, LastLogon, PasswordLastSet, PasswordRequired, @{Name = 'IsAdmin'; Expression = { (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole("Administrators") } }, SID
     } -OperationName "Collect Local User Accounts" -Quiet:$Quiet
     Save-WinFireData -Data $localUsers -FileName "User_Accounts" -Quiet:$Quiet
 
@@ -665,9 +706,9 @@ Function Get-WinFireUserAccounts {
     } -OperationName "Get User Profiles" -Quiet:$Quiet
 
     if ($userProfiles) {
-        foreach ($profile in $userProfiles) {
-            $username = (New-Object System.Security.Principal.SecurityIdentifier $profile.Sid).Translate([System.Security.Principal.NTAccount]).Value
-            $profilePath = $profile.LocalPath
+        foreach ($userProfile in $userProfiles) {
+            $username = (New-Object System.Security.Principal.SecurityIdentifier $userProfile.Sid).Translate([System.Security.Principal.NTAccount]).Value
+            $profilePath = $userProfile.LocalPath
 
             $recentFiles = @()
             # Attempt to find some recently accessed files (limited to desktop for Quick scan)
@@ -684,9 +725,9 @@ Function Get-WinFireUserAccounts {
             }
 
             if ($recentFiles.Count -gt 0) {
-                 $userProfileArtifacts += [PSCustomObject]@{
-                    Username          = $username
-                    ProfilePath       = $profilePath
+                $userProfileArtifacts += [PSCustomObject]@{
+                    Username              = $username
+                    ProfilePath           = $profilePath
                     RecentlyAccessedFiles = $recentFiles | ConvertTo-Json -Compress
                 }
             }
@@ -715,9 +756,10 @@ Function Get-WinFireProcessServiceAnalysis {
 
     # Running processes
     $processes = Invoke-WinFireSafeOperation -Operation {
-        Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine, CreationDate, @{Name='User';Expression={
-            try { ($_.GetOwner().User + "\" + $_.GetOwner().Domain) } catch { "N/A" }
-        }}
+        Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine, CreationDate, @{Name = 'User'; Expression = {
+                try { ($_.GetOwner().User + "\" + $_.GetOwner().Domain) } catch { "N/A" }
+            }
+        }
     } -OperationName "Collect Running Processes" -Quiet:$Quiet
 
     if ($processes) {
@@ -730,14 +772,14 @@ Function Get-WinFireProcessServiceAnalysis {
                 }
             }
             $processList += [PSCustomObject]@{
-                PID            = $p.ProcessId
-                PPID           = $p.ParentProcessId
-                Name           = $p.Name
-                Path           = $p.ExecutablePath
-                CommandLine    = $p.CommandLine
-                CreationDate   = $p.CreationDate.ToString('yyyy-MM-dd HH:mm:ss')
-                User           = $p.User
-                FileHash       = $hash
+                PID          = $p.ProcessId
+                PPID         = $p.ParentProcessId
+                Name         = $p.Name
+                Path         = $p.ExecutablePath
+                CommandLine  = $p.CommandLine
+                CreationDate = $p.CreationDate.ToString('yyyy-MM-dd HH:mm:ss')
+                User         = $p.User
+                FileHash     = $hash
             }
         }
         Save-WinFireData -Data $processList -FileName "Running_Processes" -Quiet:$Quiet
@@ -754,7 +796,7 @@ Function Get-WinFireProcessServiceAnalysis {
 
     # Scheduled tasks
     $scheduledTasks = Invoke-WinFireSafeOperation -Operation {
-        Get-ScheduledTask | Select-Object TaskName, State, LastRunTime, LastTaskResult, Author, @{N='Actions';E={($_.Actions | ConvertTo-Json -Compress)}}, @{N='Triggers';E={($_.Triggers | ConvertTo-Json -Compress)}}
+        Get-ScheduledTask | Select-Object TaskName, State, LastRunTime, LastTaskResult, Author, @{N = 'Actions'; E = { ($_.Actions | ConvertTo-Json -Compress) } }, @{N = 'Triggers'; E = { ($_.Triggers | ConvertTo-Json -Compress) } }
     } -OperationName "Collect Scheduled Tasks" -Quiet:$Quiet
     Save-WinFireData -Data $scheduledTasks -FileName "Scheduled_Tasks" -Quiet:$Quiet
 
@@ -802,7 +844,7 @@ Function Get-WinFireNetworkAnalysis {
     $smbSessions = @()
     $smbOpenFiles = @()
     $networkProfiles = @()
-    $dnsEntries = @()
+
 
     $activeConnections = Invoke-WinFireSafeOperation -Operation {
         Get-NetTCPConnection | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess, CreationTime
@@ -812,7 +854,7 @@ Function Get-WinFireNetworkAnalysis {
     } -OperationName "Get Active UDP Connections" -Quiet:$Quiet
     Save-WinFireData -Data $activeConnections -FileName "Active_Network_Connections" -Quiet:$Quiet
 
-    $listeningPorts = $activeConnections | Where-Object {$_.State -eq 'Listen'} | Select-Object LocalAddress, LocalPort, OwningProcess -Unique
+    $listeningPorts = $activeConnections | Where-Object { $_.State -eq 'Listen' } | Select-Object LocalAddress, LocalPort, OwningProcess -Unique
     Save-WinFireData -Data $listeningPorts -FileName "Listening_Ports" -Quiet:$Quiet
 
     $networkShares = Invoke-WinFireSafeOperation -Operation {
@@ -844,14 +886,16 @@ Function Get-WinFireNetworkAnalysis {
                 # This is a very basic check and might not catch all cases, but it's an attempt.
                 $ifGuid = (Get-NetAdapter -Name $adapter.Name).InterfaceGuid.Guid
                 $binding = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\$ifGuid" -ErrorAction SilentlyContinue
-                if ($binding -and $binding.PromiscuousMode -eq "1") { # Placeholder: This registry key might not exist or be accurate on all systems
+                if ($binding -and $binding.PromiscuousMode -eq "1") {
+                    # Placeholder: This registry key might not exist or be accurate on all systems
                     $promiscList += [PSCustomObject]@{
-                        InterfaceName = $adapter.Name
-                        Description   = $adapter.Description
+                        InterfaceName   = $adapter.Name
+                        Description     = $adapter.Description
                         PromiscuousMode = "Likely Enabled (Registry Indicator)"
                     }
                 }
-            } catch {}
+            }
+            catch {}
         }
         $promiscList
     } -OperationName "Detect Promiscuous Mode Interfaces" -Quiet:$Quiet
@@ -915,7 +959,7 @@ Function Get-WinFireFileSystemAnalysis {
 
     foreach ($path in $searchPaths) {
         if (-not (Test-Path $path)) { continue }
-        Log-WinFireMessage -Type INFO -Message "Scanning path: $path" -Quiet:$Quiet
+        Write-WinFireLog -Type INFO -Message "Scanning path: $path" -Quiet:$Quiet
 
         $items = Invoke-WinFireSafeOperation -Operation {
             Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $recentTimeThreshold -or $_.CreationTime -ge $recentTimeThreshold }
@@ -935,8 +979,7 @@ Function Get-WinFireFileSystemAnalysis {
                 $extWithoutDot = $item.Extension -replace '^\.', ''
                 if ($suspiciousExtensions -contains $extWithoutDot -or
                     $item.Attributes -match "Hidden" -or
-                    $item.Name -match "temp\.exe" -or $item.Name -match "install\.exe")
-                {
+                    $item.Name -match "temp\.exe" -or $item.Name -match "install\.exe") {
                     $suspiciousFiles += [PSCustomObject]@{
                         FullName      = $item.FullName
                         CreationTime  = $item.CreationTime.ToString('yyyy-MM-dd HH:mm:ss')
@@ -972,8 +1015,8 @@ Function Get-WinFireFileSystemAnalysis {
         Invoke-WinFireSafeOperation -Operation {
             Copy-Item -Path $amcachePath -Destination $destAmcache -Force -ErrorAction Stop
             $hash = Get-FileHashSafe -FilePath $destAmcache -Algorithm $HashAlgorithm
-            $script:CollectedFiles += [PSCustomObject]@{Path = $destAmcache; Hash = $hash; HashType = $HashAlgorithm; Type = "File"}
-            $amcacheFile += [PSCustomObject]@{Source = $amcachePath; Destination = $destAmcache; Hash = $hash}
+            $script:CollectedFiles += [PSCustomObject]@{Path = $destAmcache; Hash = $hash; HashType = $HashAlgorithm; Type = "File" }
+            $amcacheFile += [PSCustomObject]@{Source = $amcachePath; Destination = $destAmcache; Hash = $hash }
         } -OperationName "Collect Amcache.hve" -Quiet:$Quiet
     }
     Save-WinFireData -Data $amcacheFile -FileName "Collected_Amcache" -Quiet:$Quiet
@@ -990,8 +1033,8 @@ Function Get-WinFireFileSystemAnalysis {
         if ($pfFiles) {
             foreach ($pf in $pfFiles) {
                 $hash = Get-FileHashSafe -FilePath $pf.FullName -Algorithm $HashAlgorithm
-                $script:CollectedFiles += [PSCustomObject]@{Path = $pf.FullName; Hash = $hash; HashType = $HashAlgorithm; Type = "File"}
-                $prefetchFiles += [PSCustomObject]@{FileName = $pf.Name; Path = $pf.FullName; Hash = $hash}
+                $script:CollectedFiles += [PSCustomObject]@{Path = $pf.FullName; Hash = $hash; HashType = $HashAlgorithm; Type = "File" }
+                $prefetchFiles += [PSCustomObject]@{FileName = $pf.Name; Path = $pf.FullName; Hash = $hash }
             }
         }
     }
@@ -1004,8 +1047,8 @@ Function Get-WinFireFileSystemAnalysis {
         Invoke-WinFireSafeOperation -Operation {
             Copy-Item -Path $srumPath -Destination $destSrum -Force -ErrorAction Stop
             $hash = Get-FileHashSafe -FilePath $destSrum -Algorithm $HashAlgorithm
-            $script:CollectedFiles += [PSCustomObject]@{Path = $destSrum; Hash = $hash; HashType = $HashAlgorithm; Type = "File"}
-            $srumDb += [PSCustomObject]@{Source = $srumPath; Destination = $destSrum; Hash = $hash}
+            $script:CollectedFiles += [PSCustomObject]@{Path = $destSrum; Hash = $hash; HashType = $HashAlgorithm; Type = "File" }
+            $srumDb += [PSCustomObject]@{Source = $srumPath; Destination = $destSrum; Hash = $hash }
         } -OperationName "Collect SRUDB.dat (SRUM)" -Quiet:$Quiet
     }
     Save-WinFireData -Data $srumDb -FileName "Collected_SRUM_DB" -Quiet:$Quiet
@@ -1015,9 +1058,9 @@ Function Get-WinFireFileSystemAnalysis {
         Get-CimInstance Win32_UserProfile | Select-Object -Property LocalPath, Sid
     } -OperationName "Get User Profiles for Timeline" -Quiet:$Quiet
     if ($userProfiles) {
-        foreach ($profile in $userProfiles) {
-            $username = (New-Object System.Security.Principal.SecurityIdentifier $profile.Sid).Translate([System.Security.Principal.NTAccount]).Value
-            $timelinePath = Join-Path $profile.LocalPath "AppData\Local\Microsoft\Windows\ActivitiesCache.db"
+        foreach ($userProfile in $userProfiles) {
+            $username = (New-Object System.Security.Principal.SecurityIdentifier $userProfile.Sid).Translate([System.Security.Principal.NTAccount]).Value
+            $timelinePath = Join-Path $userProfile.LocalPath "AppData\Local\Microsoft\Windows\ActivitiesCache.db"
             if (Test-Path $timelinePath) {
                 $destTimelineDir = Join-Path $script:ResultsPath "Collected_Artifacts\Timeline\$username"
                 New-Item -ItemType Directory -Path $destTimelineDir -ErrorAction SilentlyContinue | Out-Null
@@ -1025,8 +1068,8 @@ Function Get-WinFireFileSystemAnalysis {
                 Invoke-WinFireSafeOperation -Operation {
                     Copy-Item -Path $timelinePath -Destination $destTimeline -Force -ErrorAction Stop
                     $hash = Get-FileHashSafe -FilePath $destTimeline -Algorithm $HashAlgorithm
-                    $script:CollectedFiles += [PSCustomObject]@{Path = $destTimeline; Hash = $hash; HashType = $HashAlgorithm; Type = "File"}
-                    $windowsTimeline += [PSCustomObject]@{Username = $username; Source = $timelinePath; Destination = $destTimeline; Hash = $hash}
+                    $script:CollectedFiles += [PSCustomObject]@{Path = $destTimeline; Hash = $hash; HashType = $HashAlgorithm; Type = "File" }
+                    $windowsTimeline += [PSCustomObject]@{Username = $username; Source = $timelinePath; Destination = $destTimeline; Hash = $hash }
                 } -OperationName "Collect Timeline for $username" -Quiet:$Quiet
             }
         }
@@ -1062,7 +1105,7 @@ Function Get-WinFireRegistryAnalysis {
     $networkDriveHistory = @()
     $userAssist = @() # Very complex to parse directly, will grab raw keys if possible
     $shellBags = @() # Very complex to parse directly, will grab raw keys if possible
-    $persistenceKeys = @() # Merged with autorun
+
     $comHijacking = @()
 
     # Autorun registry keys (expanded for persistence)
@@ -1089,9 +1132,9 @@ Function Get-WinFireRegistryAnalysis {
         $items = Invoke-WinFireSafeOperation -Operation {
             Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | Select-Object -Property * | ForEach-Object {
                 [PSCustomObject]@{
-                    Path        = $path
-                    Name        = if ($_.PSPropertySet.DefaultDisplayPropertySet.Count -gt 0) {$_.PSPropertySet.DefaultDisplayPropertySet[0]} else {"N/A"}
-                    Value       = if ($_.PSPropertySet.DefaultDisplayPropertySet.Count -gt 1) {$_.PSPropertySet.DefaultDisplayPropertySet[1]} else {$_.PSPropertySet.DefaultDisplayPropertySet}
+                    Path          = $path
+                    Name          = if ($_.PSPropertySet.DefaultDisplayPropertySet.Count -gt 0) { $_.PSPropertySet.DefaultDisplayPropertySet[0] } else { "N/A" }
+                    Value         = if ($_.PSPropertySet.DefaultDisplayPropertySet.Count -gt 1) { $_.PSPropertySet.DefaultDisplayPropertySet[1] } else { $_.PSPropertySet.DefaultDisplayPropertySet }
                     LastWriteTime = (Get-Item -Path $path).LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') # Get key's last write time
                 }
             }
@@ -1102,11 +1145,13 @@ Function Get-WinFireRegistryAnalysis {
 
     # Recently accessed files (RecentDocs)
     $recentDocs = Invoke-WinFireSafeOperation -Operation {
-        Get-ItemProperty -Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs\* -ErrorAction SilentlyContinue | Select-Object PSPath, PSChildName, @{N='Data';E={
-            if ($_.PSObject.Properties.Count -gt 0) {
-                ($_.PSObject.Properties | Where-Object { $_.Name -match '^\d+$' -and $_.IsSettable -eq $false } | Select-Object -ExpandProperty Value) -join ','
-            } else { "N/A" }
-        }}
+        Get-ItemProperty -Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs\* -ErrorAction SilentlyContinue | Select-Object PSPath, PSChildName, @{N = 'Data'; E = {
+                if ($_.PSObject.Properties.Count -gt 0) {
+                    ($_.PSObject.Properties | Where-Object { $_.Name -match '^\d+$' -and $_.IsSettable -eq $false } | Select-Object -ExpandProperty Value) -join ','
+                }
+                else { "N/A" }
+            }
+        }
     } -OperationName "Collect Registry RecentDocs" -Quiet:$Quiet
     Save-WinFireData -Data $recentDocs -FileName "Registry_RecentDocs" -Quiet:$Quiet
 
@@ -1122,8 +1167,8 @@ Function Get-WinFireRegistryAnalysis {
                 $itemPath = $_.PSPath
                 $properties = Get-ItemProperty -Path $itemPath -ErrorAction SilentlyContinue | Select-Object *
                 [PSCustomObject]@{
-                    Path        = $itemPath
-                    Properties  = $properties | ConvertTo-Json -Compress
+                    Path          = $itemPath
+                    Properties    = $properties | ConvertTo-Json -Compress
                     LastWriteTime = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
                 }
             }
@@ -1136,8 +1181,8 @@ Function Get-WinFireRegistryAnalysis {
     $networkDriveHistory = Invoke-WinFireSafeOperation -Operation {
         Get-ItemProperty -Path HKLM:\SYSTEM\MountedDevices -ErrorAction SilentlyContinue | Select-Object * | ForEach-Object {
             [PSCustomObject]@{
-                Name        = $_.PSPropertySet.DefaultDisplayPropertySet[0]
-                Value       = $_.PSPropertySet.DefaultDisplayPropertySet[1]
+                Name          = $_.PSPropertySet.DefaultDisplayPropertySet[0]
+                Value         = $_.PSPropertySet.DefaultDisplayPropertySet[1]
                 AllProperties = $_ | ConvertTo-Json -Compress
             }
         }
@@ -1149,8 +1194,8 @@ Function Get-WinFireRegistryAnalysis {
     $userAssist = Invoke-WinFireSafeOperation -Operation {
         Get-Item -Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist\* -ErrorAction SilentlyContinue | ForEach-Object {
             [PSCustomObject]@{
-                Path = $_.PSPath
-                Values = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json -Compress)
+                Path          = $_.PSPath
+                Values        = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json -Compress)
                 LastWriteTime = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             }
         }
@@ -1161,15 +1206,15 @@ Function Get-WinFireRegistryAnalysis {
         $sb = @()
         Get-Item -Path HKCU:\Software\Microsoft\Windows\ShellNoRoam\Bags\* -ErrorAction SilentlyContinue | ForEach-Object {
             $sb += [PSCustomObject]@{
-                Path = $_.PSPath
-                Values = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json -Compress)
+                Path          = $_.PSPath
+                Values        = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json -Compress)
                 LastWriteTime = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             }
         }
         Get-Item -Path HKCU:\Software\Microsoft\Windows\Shell\Bags\* -ErrorAction SilentlyContinue | ForEach-Object {
             $sb += [PSCustomObject]@{
-                Path = $_.PSPath
-                Values = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json -Compress)
+                Path          = $_.PSPath
+                Values        = (Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json -Compress)
                 LastWriteTime = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             }
         }
@@ -1188,8 +1233,8 @@ Function Get-WinFireRegistryAnalysis {
                 (-not $inprocServer.'(Default)'.StartsWith($env:ProgramFiles)) -and
                 (-not $inprocServer.'(Default)'.StartsWith(${env:ProgramFiles(x86)}))) {
                 $results += [PSCustomObject]@{
-                    CLSID = $clsid.PSChildName
-                    Path = $inprocServer.'(Default)'
+                    CLSID         = $clsid.PSChildName
+                    Path          = $inprocServer.'(Default)'
                     LastWriteTime = $clsid.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
                 }
             }
@@ -1241,21 +1286,22 @@ Function Get-WinFireEventLogAnalysis {
             # Use -MaxEvents for quick scan to limit volume
             if ($Quick) {
                 Get-WinEvent -FilterHashtable $filterHashTable -ErrorAction SilentlyContinue -MaxEvents 5000
-            } else {
+            }
+            else {
                 Get-WinEvent -FilterHashtable $filterHashTable -ErrorAction SilentlyContinue
             }
         } -OperationName "Collect events from log: $logName" -Quiet:$Quiet
 
         if ($events) {
-            foreach ($event in $events) {
+            foreach ($logEvent in $events) {
                 $collectedEvents += [PSCustomObject]@{
-                    LogName    = $event.LogName
-                    Id         = $event.Id
-                    ProviderName = $event.ProviderName
-                    TimeCreated = $event.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
-                    LevelDisplayName = $event.LevelDisplayName
-                    Message    = ($event.Message -replace "`r`n"," ").Substring(0, [System.Math]::Min(500, $event.Message.Length)) # Truncate long messages
-                    Properties = $event.Properties | ForEach-Object { "$($_.Name): $($_.Value)" } | Out-String # For specific data fields
+                    LogName          = $logEvent.LogName
+                    Id               = $logEvent.Id
+                    ProviderName     = $logEvent.ProviderName
+                    TimeCreated      = $logEvent.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
+                    LevelDisplayName = $logEvent.LevelDisplayName
+                    Message          = ($logEvent.Message -replace "`r`n", " ").Substring(0, [System.Math]::Min(500, $logEvent.Message.Length)) # Truncate long messages
+                    Properties       = $logEvent.Properties | ForEach-Object { "$($_.Name): $($_.Value)" } | Out-String # For specific data fields
                 }
             }
         }
@@ -1292,9 +1338,9 @@ Function Get-WinFireBrowserForensics {
             Name of the browser for logging.
         #>
         param(
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory = $true)]
             [string]$SourcePath,
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory = $true)]
             [string]$DestPath,
             [string]$BrowserName
         )
@@ -1305,13 +1351,13 @@ Function Get-WinFireBrowserForensics {
             $runningBrowserProcesses = Get-Process -Name $browserProcessNames -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$SourcePath*" }
 
             if ($runningBrowserProcesses.Count -gt 0) {
-                Log-WinFireMessage -Type WARN -Message "Browser processes detected for ${BrowserName}. Attempting robust copy with RoboCopy due to potential file locks." -Quiet:$Quiet
+                Write-WinFireLog -Type WARN -Message "Browser processes detected for ${BrowserName}. Attempting robust copy with RoboCopy due to potential file locks." -Quiet:$Quiet
                 # Use ROBOCOPY for better handling of locked files. /E (empty dirs), /COPY:DAT (data, attributes, timestamps), /R:3 (retries), /W:1 (wait time), /NJH /NJS (no job header/summary for cleaner output)
                 $robocopyArgs = @("/E", "/COPY:DAT", "/R:3", "/W:1", "/NJH", "/NJS")
                 $robocopyCmd = "robocopy.exe"
 
                 $command = "$robocopyCmd `"$SourcePath`" `"$DestPath`" $($robocopyArgs -join ' ')"
-                Log-WinFireMessage -Type INFO -Message "Executing: $command" -Quiet:$Quiet
+                Write-WinFireLog -Type INFO -Message "Executing: $command" -Quiet:$Quiet
 
                 # Execute robocopy and capture output/exit code
                 $proc = Start-Process -FilePath $robocopyCmd -ArgumentList @("$SourcePath", "$DestPath") + $robocopyArgs -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
@@ -1320,26 +1366,29 @@ Function Get-WinFireBrowserForensics {
                 # RoboCopy success codes (0-7 usually mean success or minor issues)
                 if ($exitCode -le 7) {
                     $success = $true
-                    Log-WinFireMessage -Type SUCCESS -Message "RoboCopy for ${BrowserName} completed with exit code $exitCode (likely successful)." -Quiet:$Quiet
-                } else {
-                    Log-WinFireMessage -Type ERROR -Message "RoboCopy for ${BrowserName} failed with exit code $exitCode." -Quiet:$Quiet
+                    Write-WinFireLog -Type SUCCESS -Message "RoboCopy for ${BrowserName} completed with exit code $exitCode (likely successful)." -Quiet:$Quiet
                 }
-            } else {
-                Log-WinFireMessage -Type INFO -Message "No active browser processes for ${BrowserName}. Attempting standard copy." -Quiet:$Quiet
+                else {
+                    Write-WinFireLog -Type ERROR -Message "RoboCopy for ${BrowserName} failed with exit code $exitCode." -Quiet:$Quiet
+                }
+            }
+            else {
+                Write-WinFireLog -Type INFO -Message "No active browser processes for ${BrowserName}. Attempting standard copy." -Quiet:$Quiet
                 Copy-Item -Path $SourcePath -Destination $DestPath -Recurse -Force -ErrorAction Stop
                 $success = $true
             }
-        } catch {
-            Log-WinFireMessage -Type ERROR -Message "Failed to copy browser files for ${BrowserName}: $_" -Quiet:$Quiet
+        }
+        catch {
+            Write-WinFireLog -Type ERROR -Message "Failed to copy browser files for ${BrowserName}: $_" -Quiet:$Quiet
             $success = $false
         }
         return $success
     }
 
     $browsers = @(
-        @{Name = "Google Chrome"; Path = "$env:LOCALAPPDATA\Google\Chrome\User Data"},
-        @{Name = "Microsoft Edge"; Path = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"},
-        @{Name = "Mozilla Firefox"; Path = "$env:APPDATA\Mozilla\Firefox\Profiles"}
+        @{Name = "Google Chrome"; Path = "$env:LOCALAPPDATA\Google\Chrome\User Data" },
+        @{Name = "Microsoft Edge"; Path = "$env:LOCALAPPDATA\Microsoft\Edge\User Data" },
+        @{Name = "Mozilla Firefox"; Path = "$env:APPDATA\Mozilla\Firefox\Profiles" }
     )
 
     foreach ($browser in $browsers) {
@@ -1354,8 +1403,7 @@ Function Get-WinFireBrowserForensics {
                     CopiedTo    = $destPath
                     Status      = "Copied for external analysis"
                 }
-                # Hash collected directory - individual files won't be hashed here, only the directory itself
-                $hash = Get-FileHashSafe -FilePath $destPath -Algorithm $HashAlgorithm # This will hash the directory content as a whole (won't work for directories with Get-FileHash directly)
+                # Note: Get-FileHash does not work on directories, so we record the path without a hash
                 # Instead, we just record the copied path. Hashing individual files within the copied directory is too slow and redundant here.
                 $script:CollectedFiles += [PSCustomObject]@{
                     Path     = $destPath
@@ -1363,7 +1411,8 @@ Function Get-WinFireBrowserForensics {
                     HashType = $HashAlgorithm
                     Type     = "Directory"
                 }
-            } else {
+            }
+            else {
                 $browserArtifacts += [PSCustomObject]@{
                     BrowserName = $browser.Name
                     SourcePath  = $browserPath
@@ -1371,8 +1420,9 @@ Function Get-WinFireBrowserForensics {
                     Status      = "Failed/Partial copy - Check logs"
                 }
             }
-        } else {
-            Log-WinFireMessage -Type INFO -Message "$($browser.Name) data path not found: $browserPath" -Quiet:$Quiet
+        }
+        else {
+            Write-WinFireLog -Type INFO -Message "$($browser.Name) data path not found: $browserPath" -Quiet:$Quiet
             $browserArtifacts += [PSCustomObject]@{
                 BrowserName = $browser.Name
                 SourcePath  = $browserPath
@@ -1399,28 +1449,29 @@ Function Get-WinFireSecurityToolsDetection {
 
     # Windows Defender status
     $defenderStatus = Invoke-WinFireSafeOperation -Operation {
-        Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object AntivirusEnabled, AntispywareEnabled, RealTimeProtectionEnabled, FullScanEndTime, QuickScanEndTime, SignatureLastUpdated, @{Name='ProductVersion'; Expression={ (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows Defender).ProductVersion }}
+        Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object AntivirusEnabled, AntispywareEnabled, RealTimeProtectionEnabled, FullScanEndTime, QuickScanEndTime, SignatureLastUpdated, @{Name = 'ProductVersion'; Expression = { (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows Defender).ProductVersion } }
     } -OperationName "Get Windows Defender Status" -Quiet:$Quiet
     if ($defenderStatus) {
         $securityToolStatus += [PSCustomObject]@{
-            Tool         = "Windows Defender"
-            Status       = if ($defenderStatus.AntivirusEnabled) {"Enabled"} else {"Disabled"}
-            Details      = $defenderStatus | ConvertTo-Json -Compress
+            Tool    = "Windows Defender"
+            Status  = if ($defenderStatus.AntivirusEnabled) { "Enabled" } else { "Disabled" }
+            Details = $defenderStatus | ConvertTo-Json -Compress
         }
-    } else {
-        $securityToolStatus += [PSCustomObject]@{Tool = "Windows Defender"; Status = "Not Detected/Error"; Details = "Could not retrieve status."}
+    }
+    else {
+        $securityToolStatus += [PSCustomObject]@{Tool = "Windows Defender"; Status = "Not Detected/Error"; Details = "Could not retrieve status." }
     }
 
     # Installed AntiVirus products (via WMI)
     $avProducts = Invoke-WinFireSafeOperation -Operation {
-        Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | Select-Object DisplayName, ProductState, PathToSignedProductExe, @{N='Enabled';E={($_.ProductState -band 0x100000) -ne 0}}, @{N='UpToDate';E={($_.ProductState -band 0x20000) -ne 0}}
+        Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | Select-Object DisplayName, ProductState, PathToSignedProductExe, @{N = 'Enabled'; E = { ($_.ProductState -band 0x100000) -ne 0 } }, @{N = 'UpToDate'; E = { ($_.ProductState -band 0x20000) -ne 0 } }
     } -OperationName "Get Installed AV Products" -Quiet:$Quiet
     if ($avProducts) {
         foreach ($av in $avProducts) {
-             $securityToolStatus += [PSCustomObject]@{
-                Tool         = $av.DisplayName
-                Status       = if ($av.Enabled) {"Enabled"} else {"Disabled"}
-                Details      = $av | ConvertTo-Json -Compress
+            $securityToolStatus += [PSCustomObject]@{
+                Tool    = $av.DisplayName
+                Status  = if ($av.Enabled) { "Enabled" } else { "Disabled" }
+                Details = $av | ConvertTo-Json -Compress
             }
         }
     }
@@ -1438,25 +1489,26 @@ Function Get-WinFireSecurityToolsDetection {
         } -OperationName "Check EDR Service: $serviceName" -Quiet:$Quiet
         if ($service) {
             $foundEdr += [PSCustomObject]@{
-                Name     = $service.Name
+                Name        = $service.Name
                 DisplayName = $service.DisplayName
-                Status   = $service.Status
-                StartType = $service.StartType
-                Path     = (Invoke-WinFireSafeOperation -Operation { (Get-CimInstance Win32_Service | Where-Object Name -eq $service.Name).PathName } -OperationName "Get Service Path for $($service.Name)" -Quiet:$Quiet)
+                Status      = $service.Status
+                StartType   = $service.StartType
+                Path        = (Invoke-WinFireSafeOperation -Operation { (Get-CimInstance Win32_Service | Where-Object Name -eq $service.Name).PathName } -OperationName "Get Service Path for $($service.Name)" -Quiet:$Quiet)
             }
         }
     }
     if ($foundEdr.Count -gt 0) {
         $securityToolStatus += [PSCustomObject]@{
-            Tool         = "EDR/XDR Agents (Detected Services)"
-            Status       = "Detected"
-            Details      = $foundEdr | ConvertTo-Json -Compress
+            Tool    = "EDR/XDR Agents (Detected Services)"
+            Status  = "Detected"
+            Details = $foundEdr | ConvertTo-Json -Compress
         }
-    } else {
+    }
+    else {
         $securityToolStatus += [PSCustomObject]@{
-            Tool         = "EDR/XDR Agents (Detected Services)"
-            Status       = "None Found (based on common names)"
-            Details      = "No common EDR service names found."
+            Tool    = "EDR/XDR Agents (Detected Services)"
+            Status  = "None Found (based on common names)"
+            Details = "No common EDR service names found."
         }
     }
 
@@ -1497,7 +1549,7 @@ Function Get-WinFireMemoryAnalysisIndicators {
                 }
             }
             catch {
-                Log-WinFireMessage -Type WARN -Message "Could not get modules for process $($p.ProcessName) (PID: $($p.Id)): $_" -Quiet:$Quiet
+                Write-WinFireLog -Type WARN -Message "Could not get modules for process $($p.ProcessName) (PID: $($p.Id)): $_" -Quiet:$Quiet
             }
         }
         Save-WinFireData -Data $loadedModules -FileName "Loaded_Modules" -Quiet:$Quiet
@@ -1508,12 +1560,12 @@ Function Get-WinFireMemoryAnalysisIndicators {
         Get-Process | Where-Object {
             # Process Name vs MainModule Name (sometimes indicative of hollowed/replaced PEB)
             # This relies on MainModule being accessible, which isn't always the case for system processes or highly restricted ones.
-            ($_.MainModule.ModuleName -ne $_.ProcessName -and $_.MainModule.ModuleName -ne $null) -or
+            ($_.MainModule.ModuleName -ne $_.ProcessName -and $null -ne $_.MainModule.ModuleName) -or
             # Unusually few modules for a typical process
             ($_.Modules.Count -lt 3 -and $_.ProcessName -notmatch "idle|system|csrss|smss") -or
             # Memory anomalies: working set much smaller than virtual memory size (might indicate unmapped sections)
             ($_.WorkingSet -lt 1MB -and $_.VirtualMemorySize -gt 100MB)
-        } | Select-Object Id, ProcessName, Path, CommandLine, WorkingSet, VirtualMemorySize, @{Name='MainModule'; Expression={try{$_.MainModule.ModuleName}catch{"N/A"}}}, @{Name='ModuleCount';Expression={try{$_.Modules.Count}catch{"N/A"}}}
+        } | Select-Object Id, ProcessName, Path, CommandLine, WorkingSet, VirtualMemorySize, @{Name = 'MainModule'; Expression = { try { $_.MainModule.ModuleName }catch { "N/A" } } }, @{Name = 'ModuleCount'; Expression = { try { $_.Modules.Count }catch { "N/A" } } }
     } -OperationName "Detect Suspicious Processes (Hollowing Indicators)" -Quiet:$Quiet
     Save-WinFireData -Data $suspiciousProcesses -FileName "Suspicious_Process_Indicators" -Quiet:$Quiet
 
@@ -1530,14 +1582,15 @@ Function Get-WinFireMemoryAnalysisIndicators {
                     ($_.FileName -like "*temp\*" -or $_.FileName -like "*appdata\*") # Loaded from temp or appdata
                 } | ForEach-Object {
                     $results += [PSCustomObject]@{
-                        ProcessName = $process.ProcessName
-                        PID = $process.Id
+                        ProcessName   = $process.ProcessName
+                        PID           = $process.Id
                         SuspiciousDLL = $_.FileName
-                        BaseAddress = $_.BaseAddress
+                        BaseAddress   = $_.BaseAddress
                     }
                 }
-            } catch {
-                Log-WinFireMessage -Type WARN -Message "Could not check DLLs for process $($process.ProcessName) (PID: $($process.Id)): $_" -Quiet:$Quiet
+            }
+            catch {
+                Write-WinFireLog -Type WARN -Message "Could not check DLLs for process $($process.ProcessName) (PID: $($process.Id)): $_" -Quiet:$Quiet
             }
         }
         $results
@@ -1565,7 +1618,7 @@ Function Get-WinFirePowerShellActivity {
     $psLoggingConfig += [PSCustomObject]@{
         Setting = "Script Block Logging"
         Enabled = if ($scriptBlockLogging -and $scriptBlockLogging.EnableScriptBlockLogging) { $true } else { $false }
-        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging"
+        Path    = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging"
     }
 
     # Module Logging
@@ -1575,7 +1628,7 @@ Function Get-WinFirePowerShellActivity {
     $psLoggingConfig += [PSCustomObject]@{
         Setting = "Module Logging"
         Enabled = if ($moduleLogging -and $moduleLogging.EnableModuleLogging) { $true } else { $false }
-        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging"
+        Path    = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging"
     }
 
     # Transcription
@@ -1583,10 +1636,10 @@ Function Get-WinFirePowerShellActivity {
         Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription" -ErrorAction SilentlyContinue
     } -OperationName "Get PowerShell Transcription Config" -Quiet:$Quiet
     $psLoggingConfig += [PSCustomObject]@{
-        Setting = "Transcription"
-        Enabled = if ($transcription -and $transcription.EnableTranscripting) { $true } else { $false }
+        Setting         = "Transcription"
+        Enabled         = if ($transcription -and $transcription.EnableTranscripting) { $true } else { $false }
         OutputDirectory = $transcription.OutputDirectory
-        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription"
+        Path            = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription"
     }
 
     Save-WinFireData -Data $psLoggingConfig -FileName "PowerShell_Logging_Configuration" -Quiet:$Quiet
@@ -1616,10 +1669,10 @@ Function Get-WinFireDefenderExclusions {
                 $suspiciousReasons += "Located in user-writable directory"
             }
             $defenderExclusions += [PSCustomObject]@{
-                Type = "Path"
-                Value = $path
+                Type         = "Path"
+                Value        = $path
                 IsSuspicious = $isSuspicious
-                Reason = ($suspiciousReasons -join "; ")
+                Reason       = ($suspiciousReasons -join "; ")
             }
         }
     }
@@ -1631,10 +1684,10 @@ Function Get-WinFireDefenderExclusions {
     if ($processExclusions) {
         foreach ($proc in $processExclusions) {
             $defenderExclusions += [PSCustomObject]@{
-                Type = "Process"
-                Value = $proc
+                Type         = "Process"
+                Value        = $proc
                 IsSuspicious = $false
-                Reason = ""
+                Reason       = ""
             }
         }
     }
@@ -1651,10 +1704,10 @@ Function Get-WinFireDefenderExclusions {
                 $isSuspicious = $true
             }
             $defenderExclusions += [PSCustomObject]@{
-                Type = "Extension"
-                Value = $ext
+                Type         = "Extension"
+                Value        = $ext
                 IsSuspicious = $isSuspicious
-                Reason = if ($isSuspicious) { "Dangerous executable extension excluded" } else { "" }
+                Reason       = if ($isSuspicious) { "Dangerous executable extension excluded" } else { "" }
             }
         }
     }
@@ -1680,10 +1733,10 @@ Function Get-WinFirePowerShellHistory {
     } -OperationName "Get User Profiles for PS History" -Quiet:$Quiet
 
     if ($userProfiles) {
-        foreach ($profile in $userProfiles) {
-            $historyPath = Join-Path $profile.LocalPath "AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"
+        foreach ($userProfile in $userProfiles) {
+            $historyPath = Join-Path $userProfile.LocalPath "AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"
             if (Test-Path $historyPath) {
-                $username = try { (New-Object System.Security.Principal.SecurityIdentifier $profile.SID).Translate([System.Security.Principal.NTAccount]).Value } catch { $profile.SID }
+                $username = try { (New-Object System.Security.Principal.SecurityIdentifier $userProfile.SID).Translate([System.Security.Principal.NTAccount]).Value } catch { $userProfile.SID }
                 $historyContent = Invoke-WinFireSafeOperation -Operation {
                     Get-Content -Path $historyPath -ErrorAction SilentlyContinue -Tail 500
                 } -OperationName "Read PS History for $username" -Quiet:$Quiet
@@ -1705,9 +1758,9 @@ Function Get-WinFirePowerShellHistory {
                             }
                         }
                         $psHistory += [PSCustomObject]@{
-                            Username = $username
-                            LineNumber = $lineNum
-                            Command = $line
+                            Username     = $username
+                            LineNumber   = $lineNum
+                            Command      = $line
                             IsSuspicious = $isSuspicious
                         }
                     }
@@ -1744,7 +1797,7 @@ Function Get-WinFireRDPAnalysis {
             if ($_ -match "rdp-tcp") {
                 [PSCustomObject]@{
                     SessionInfo = $_
-                    Type = "Active RDP Session"
+                    Type        = "Active RDP Session"
                 }
             }
         }
@@ -1756,9 +1809,9 @@ Function Get-WinFireRDPAnalysis {
         $servers = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Terminal Server Client\Servers\*" -ErrorAction SilentlyContinue
         $servers | ForEach-Object {
             [PSCustomObject]@{
-                Server = $_.PSChildName
+                Server   = $_.PSChildName
                 Username = $_.UsernameHint
-                Type = "Outbound RDP History"
+                Type     = "Outbound RDP History"
             }
         }
     } -OperationName "Get RDP Server History" -Quiet:$Quiet
@@ -1767,8 +1820,8 @@ Function Get-WinFireRDPAnalysis {
     # RDP events from Security log (inbound connections - Event ID 4624 with Logon Type 10)
     $rdpEvents = Invoke-WinFireSafeOperation -Operation {
         $events = Get-WinEvent -FilterHashtable @{
-            LogName = 'Security'
-            ID = 4624
+            LogName   = 'Security'
+            ID        = 4624
             StartTime = (Get-Date).AddDays(-30)
         } -MaxEvents 500 -ErrorAction SilentlyContinue | Where-Object {
             $_.Properties[8].Value -eq 10  # Logon Type 10 = Remote Interactive (RDP)
@@ -1776,9 +1829,9 @@ Function Get-WinFireRDPAnalysis {
         $events | ForEach-Object {
             [PSCustomObject]@{
                 TimeCreated = $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
-                SourceIP = $_.Properties[18].Value
-                Username = "$($_.Properties[6].Value)\$($_.Properties[5].Value)"
-                Type = "Inbound RDP Connection"
+                SourceIP    = $_.Properties[18].Value
+                Username    = "$($_.Properties[6].Value)\$($_.Properties[5].Value)"
+                Type        = "Inbound RDP Connection"
             }
         }
     } -OperationName "Get RDP Event Logs" -Quiet:$Quiet
@@ -1800,20 +1853,20 @@ Function Get-WinFireLOLBASDetection {
 
     # Define LOLBAS patterns
     $lolbasPatterns = @{
-        "certutil.exe" = @("-urlcache", "-decode", "-encode", "-decodehex", "-f http", "-f ftp")
-        "mshta.exe" = @("javascript:", "vbscript:", "http://", "https://")
-        "regsvr32.exe" = @("/s /n /u /i:http", "/s /n /u /i:https", "scrobj.dll")
-        "wmic.exe" = @("process call create", "os get", "/node:", "/format:http")
-        "cscript.exe" = @("//e:jscript", "//e:vbscript", "http://", "https://")
-        "wscript.exe" = @("//e:jscript", "//e:vbscript")
-        "msiexec.exe" = @("/q http://", "/q https://", "/q \\\\")
-        "bitsadmin.exe" = @("/transfer", "/download", "http://", "https://")
-        "powershell.exe" = @("-enc", "-encodedcommand", "downloadstring", "downloadfile", "invoke-expression", "iex", "-nop -w hidden")
-        "cmd.exe" = @("/c powershell", "/c certutil", "/c bitsadmin", "/c mshta")
-        "rundll32.exe" = @("javascript:", "http://", "https://", "shell32.dll,ShellExec_RunDLL")
-        "regasm.exe" = @("/u", "http://")
-        "regsvcs.exe" = @("http://", "https://")
-        "msbuild.exe" = @("http://", "https://")
+        "certutil.exe"    = @("-urlcache", "-decode", "-encode", "-decodehex", "-f http", "-f ftp")
+        "mshta.exe"       = @("javascript:", "vbscript:", "http://", "https://")
+        "regsvr32.exe"    = @("/s /n /u /i:http", "/s /n /u /i:https", "scrobj.dll")
+        "wmic.exe"        = @("process call create", "os get", "/node:", "/format:http")
+        "cscript.exe"     = @("//e:jscript", "//e:vbscript", "http://", "https://")
+        "wscript.exe"     = @("//e:jscript", "//e:vbscript")
+        "msiexec.exe"     = @("/q http://", "/q https://", "/q \\\\")
+        "bitsadmin.exe"   = @("/transfer", "/download", "http://", "https://")
+        "powershell.exe"  = @("-enc", "-encodedcommand", "downloadstring", "downloadfile", "invoke-expression", "iex", "-nop -w hidden")
+        "cmd.exe"         = @("/c powershell", "/c certutil", "/c bitsadmin", "/c mshta")
+        "rundll32.exe"    = @("javascript:", "http://", "https://", "shell32.dll,ShellExec_RunDLL")
+        "regasm.exe"      = @("/u", "http://")
+        "regsvcs.exe"     = @("http://", "https://")
+        "msbuild.exe"     = @("http://", "https://")
         "installutil.exe" = @("/logfile=", "/logtoconsole=false")
     }
 
@@ -1830,13 +1883,13 @@ Function Get-WinFireLOLBASDetection {
                     if ($proc.CommandLine -and $proc.CommandLine -match [regex]::Escape($pattern)) {
                         $parentProc = $processes | Where-Object { $_.ProcessId -eq $proc.ParentProcessId } | Select-Object -First 1
                         $lolbasFindings += [PSCustomObject]@{
-                            ProcessName = $proc.Name
-                            ProcessId = $proc.ProcessId
-                            CommandLine = $proc.CommandLine
+                            ProcessName    = $proc.Name
+                            ProcessId      = $proc.ProcessId
+                            CommandLine    = $proc.CommandLine
                             MatchedPattern = $pattern
-                            ParentProcess = if ($parentProc) { "$($parentProc.Name) (PID: $($parentProc.ProcessId))" } else { "Unknown" }
-                            Severity = "High"
-                            Description = "Potential LOLBAS abuse detected"
+                            ParentProcess  = if ($parentProc) { "$($parentProc.Name) (PID: $($parentProc.ProcessId))" } else { "Unknown" }
+                            Severity       = "High"
+                            Description    = "Potential LOLBAS abuse detected"
                         }
                         break
                     }
@@ -1863,18 +1916,18 @@ Function Get-WinFireCredentialIndicators {
     # Check for LSASS access (Security Event 4656/4663 with lsass.exe)
     $lsassEvents = Invoke-WinFireSafeOperation -Operation {
         Get-WinEvent -FilterHashtable @{
-            LogName = 'Security'
-            ID = @(4656, 4663)
+            LogName   = 'Security'
+            ID        = @(4656, 4663)
             StartTime = (Get-Date).AddDays(-7)
         } -MaxEvents 100 -ErrorAction SilentlyContinue | Where-Object {
             $_.Message -match "lsass\.exe"
         } | ForEach-Object {
             [PSCustomObject]@{
                 TimeCreated = $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
-                EventId = $_.Id
-                Type = "LSASS Access Event"
-                Details = "Potential credential dumping attempt"
-                Severity = "Critical"
+                EventId     = $_.Id
+                Type        = "LSASS Access Event"
+                Details     = "Potential credential dumping attempt"
+                Severity    = "Critical"
             }
         }
     } -OperationName "Check LSASS Access Events" -Quiet:$Quiet
@@ -1894,12 +1947,12 @@ Function Get-WinFireCredentialIndicators {
                     ($proc.ExecutablePath -and $proc.ExecutablePath -match $tool)) {
                     $credIndicators += [PSCustomObject]@{
                         TimeCreated = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-                        Type = "Credential Tool Detected"
+                        Type        = "Credential Tool Detected"
                         ToolPattern = $tool
                         ProcessName = $proc.Name
-                        ProcessId = $proc.ProcessId
+                        ProcessId   = $proc.ProcessId
                         CommandLine = $proc.CommandLine
-                        Severity = "Critical"
+                        Severity    = "Critical"
                     }
                 }
             }
@@ -1913,11 +1966,11 @@ Function Get-WinFireCredentialIndicators {
         ForEach-Object {
             [PSCustomObject]@{
                 TimeCreated = $_.CreationTime.ToString('yyyy-MM-dd HH:mm:ss')
-                Type = "Registry Hive Copy"
-                FilePath = $_.FullName
-                FileName = $_.Name
-                Size = $_.Length
-                Severity = "Critical"
+                Type        = "Registry Hive Copy"
+                FilePath    = $_.FullName
+                FileName    = $_.Name
+                Size        = $_.Length
+                Severity    = "Critical"
             }
         }
     } -OperationName "Check for Hive Copies" -Quiet:$Quiet
@@ -1946,10 +1999,10 @@ Function Get-WinFireAdvancedProcessAnalysis {
     if ($allProcesses) {
         # Suspicious parent-child relationships
         $suspiciousRelationships = @{
-            "winword.exe" = @("powershell.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe")
-            "excel.exe" = @("powershell.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe")
-            "outlook.exe" = @("powershell.exe", "cmd.exe", "wscript.exe", "cscript.exe")
-            "svchost.exe" = @("powershell.exe", "cmd.exe")
+            "winword.exe"  = @("powershell.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe")
+            "excel.exe"    = @("powershell.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe")
+            "outlook.exe"  = @("powershell.exe", "cmd.exe", "wscript.exe", "cscript.exe")
+            "svchost.exe"  = @("powershell.exe", "cmd.exe")
             "wmiprvse.exe" = @("powershell.exe", "cmd.exe")
             "explorer.exe" = @()  # Explorer can spawn many things, but track anyway
             "services.exe" = @("cmd.exe", "powershell.exe")
@@ -1965,14 +2018,14 @@ Function Get-WinFireAdvancedProcessAnalysis {
                     $suspiciousChildren = $suspiciousRelationships[$parentName]
                     if ($suspiciousChildren -contains $childName) {
                         $processAnalysis += [PSCustomObject]@{
-                            ParentProcess = $parentProc.Name
-                            ParentPID = $parentProc.ProcessId
-                            ChildProcess = $proc.Name
-                            ChildPID = $proc.ProcessId
+                            ParentProcess    = $parentProc.Name
+                            ParentPID        = $parentProc.ProcessId
+                            ChildProcess     = $proc.Name
+                            ChildPID         = $proc.ProcessId
                             ChildCommandLine = $proc.CommandLine
-                            CreationTime = if ($proc.CreationDate) { $proc.CreationDate.ToString('yyyy-MM-dd HH:mm:ss') } else { "N/A" }
-                            Finding = "Suspicious parent-child relationship"
-                            Severity = "High"
+                            CreationTime     = if ($proc.CreationDate) { $proc.CreationDate.ToString('yyyy-MM-dd HH:mm:ss') } else { "N/A" }
+                            Finding          = "Suspicious parent-child relationship"
+                            Severity         = "High"
                         }
                     }
                 }
@@ -1984,14 +2037,14 @@ Function Get-WinFireAdvancedProcessAnalysis {
                 foreach ($loc in $suspiciousLocations) {
                     if ($proc.ExecutablePath -like "$loc\*") {
                         $processAnalysis += [PSCustomObject]@{
-                            ParentProcess = if ($parentProc) { $parentProc.Name } else { "Unknown" }
-                            ParentPID = $proc.ParentProcessId
-                            ChildProcess = $proc.Name
-                            ChildPID = $proc.ProcessId
+                            ParentProcess    = if ($parentProc) { $parentProc.Name } else { "Unknown" }
+                            ParentPID        = $proc.ParentProcessId
+                            ChildProcess     = $proc.Name
+                            ChildPID         = $proc.ProcessId
                             ChildCommandLine = $proc.CommandLine
-                            ExecutablePath = $proc.ExecutablePath
-                            Finding = "Process running from suspicious location"
-                            Severity = "Medium"
+                            ExecutablePath   = $proc.ExecutablePath
+                            Finding          = "Process running from suspicious location"
+                            Severity         = "Medium"
                         }
                         break
                     }
@@ -2023,18 +2076,18 @@ Function Get-WinFireThreatScore {
             "Warning" {
                 $threatScore += 5
                 $findings += [PSCustomObject]@{
-                    Category = $entry.Category
-                    Status = $entry.Status
-                    Impact = "+5 points"
+                    Category    = $entry.Category
+                    Status      = $entry.Status
+                    Impact      = "+5 points"
                     Description = $entry.Description
                 }
             }
             "Failed" {
                 $threatScore += 10
                 $findings += [PSCustomObject]@{
-                    Category = $entry.Category
-                    Status = $entry.Status
-                    Impact = "+10 points"
+                    Category    = $entry.Category
+                    Status      = $entry.Status
+                    Impact      = "+10 points"
                     Description = $entry.Description
                 }
             }
@@ -2053,11 +2106,11 @@ Function Get-WinFireThreatScore {
     }
 
     $threatScoreResult = [PSCustomObject]@{
-        ThreatScore = $threatScore
-        RiskLevel = $riskLevel
+        ThreatScore   = $threatScore
+        RiskLevel     = $riskLevel
         TotalFindings = $findings.Count
-        CalculatedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-        Findings = $findings | ConvertTo-Json -Compress
+        CalculatedAt  = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+        Findings      = $findings | ConvertTo-Json -Compress
     }
 
     Save-WinFireData -Data @($threatScoreResult) -FileName "Threat_Score" -Quiet:$Quiet
@@ -2087,11 +2140,11 @@ Function Get-WinFireJumpListAnalysis {
     } -OperationName "Get User Profiles for Jump Lists" -Quiet:$Quiet
 
     if ($userProfiles) {
-        foreach ($profile in $userProfiles) {
-            $username = try { (New-Object System.Security.Principal.SecurityIdentifier $profile.SID).Translate([System.Security.Principal.NTAccount]).Value } catch { $profile.SID }
+        foreach ($userProfile in $userProfiles) {
+            $username = try { (New-Object System.Security.Principal.SecurityIdentifier $userProfile.SID).Translate([System.Security.Principal.NTAccount]).Value } catch { $userProfile.SID }
             
             # Automatic destinations (recent/frequent)
-            $autoDestPath = Join-Path $profile.LocalPath "AppData\Roaming\Microsoft\Windows\Recent\AutomaticDestinations"
+            $autoDestPath = Join-Path $userProfile.LocalPath "AppData\Roaming\Microsoft\Windows\Recent\AutomaticDestinations"
             if (Test-Path $autoDestPath) {
                 $jumpFiles = Invoke-WinFireSafeOperation -Operation {
                     Get-ChildItem -Path $autoDestPath -Filter "*.automaticDestinations-ms" -ErrorAction SilentlyContinue |
@@ -2101,12 +2154,12 @@ Function Get-WinFireJumpListAnalysis {
                 if ($jumpFiles) {
                     foreach ($jf in $jumpFiles) {
                         $jumpListData += [PSCustomObject]@{
-                            Username = $username
-                            Type = "AutomaticDestinations"
-                            FileName = $jf.Name
-                            FullPath = $jf.FullName
+                            Username     = $username
+                            Type         = "AutomaticDestinations"
+                            FileName     = $jf.Name
+                            FullPath     = $jf.FullName
                             LastModified = $jf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
-                            Size = $jf.Length
+                            Size         = $jf.Length
                         }
                     }
 
@@ -2118,7 +2171,7 @@ Function Get-WinFireJumpListAnalysis {
             }
 
             # Custom destinations (pinned)
-            $customDestPath = Join-Path $profile.LocalPath "AppData\Roaming\Microsoft\Windows\Recent\CustomDestinations"
+            $customDestPath = Join-Path $userProfile.LocalPath "AppData\Roaming\Microsoft\Windows\Recent\CustomDestinations"
             if (Test-Path $customDestPath) {
                 $customFiles = Invoke-WinFireSafeOperation -Operation {
                     Get-ChildItem -Path $customDestPath -Filter "*.customDestinations-ms" -ErrorAction SilentlyContinue |
@@ -2128,12 +2181,12 @@ Function Get-WinFireJumpListAnalysis {
                 if ($customFiles) {
                     foreach ($cf in $customFiles) {
                         $jumpListData += [PSCustomObject]@{
-                            Username = $username
-                            Type = "CustomDestinations"
-                            FileName = $cf.Name
-                            FullPath = $cf.FullName
+                            Username     = $username
+                            Type         = "CustomDestinations"
+                            FileName     = $cf.Name
+                            FullPath     = $cf.FullName
                             LastModified = $cf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
-                            Size = $cf.Length
+                            Size         = $cf.Length
                         }
                     }
                 }
@@ -2192,20 +2245,20 @@ Function Get-WinFireLNKAnalysis {
                         }
 
                         $lnkData += [PSCustomObject]@{
-                            FileName = $lnk.Name
-                            FullPath = $lnk.FullName
-                            TargetPath = $shortcut.TargetPath
-                            Arguments = $shortcut.Arguments
-                            WorkingDirectory = $shortcut.WorkingDirectory
-                            Description = $shortcut.Description
-                            CreationTime = $lnk.CreationTime.ToString('yyyy-MM-dd HH:mm:ss')
-                            LastModified = $lnk.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
-                            IsSuspicious = $isSuspicious
+                            FileName          = $lnk.Name
+                            FullPath          = $lnk.FullName
+                            TargetPath        = $shortcut.TargetPath
+                            Arguments         = $shortcut.Arguments
+                            WorkingDirectory  = $shortcut.WorkingDirectory
+                            Description       = $shortcut.Description
+                            CreationTime      = $lnk.CreationTime.ToString('yyyy-MM-dd HH:mm:ss')
+                            LastModified      = $lnk.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
+                            IsSuspicious      = $isSuspicious
                             SuspiciousReasons = ($suspiciousReasons -join "; ")
                         }
                     }
                     catch {
-                        Log-WinFireMessage -Type WARN -Message "Could not parse LNK file: $($lnk.FullName)" -Quiet:$Quiet
+                        Write-WinFireLog -Type WARN -Message "Could not parse LNK file: $($lnk.FullName)" -Quiet:$Quiet
                     }
                 }
             }
@@ -2236,11 +2289,11 @@ Function New-WinFireHtmlReport {
         The chain of custody object.
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $SummaryData,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$OutputPath,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $ChainOfCustody
     )
     $reportPath = Join-Path -Path $OutputPath -ChildPath "Reports\WinFire_Executive_Summary.html"
@@ -2317,11 +2370,11 @@ Function New-WinFireHtmlReport {
         $statusClass = ""
         switch ($entry.Status) {
             "Success" { $statusClass = "status-success" }
-            "Failed"  { $statusClass = "status-failed" }
+            "Failed" { $statusClass = "status-failed" }
             "Warning" { $statusClass = "status-warning" }
-            "Info"    { $statusClass = "status-info" }
+            "Info" { $statusClass = "status-info" }
             "Skipped" { $statusClass = "status-skipped" }
-            default   { $statusClass = "" }
+            default { $statusClass = "" }
         }
         $htmlBody += "<tr>"
         $htmlBody += "<td>$($entry.Category)</td>"
@@ -2377,9 +2430,9 @@ Function New-WinFireHashManifest {
         The base output path.
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $CollectedFiles,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$OutputPath
     )
     $manifestPath = Join-Path -Path $OutputPath -ChildPath "Reports\Hash_Manifest.txt"
@@ -2408,12 +2461,12 @@ Function Compress-WinFireEvidence {
         The path to the output directory to compress.
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$OutputPath,
         [switch]$Quiet
     )
     $zipFilePath = "$($OutputPath).zip"
-    Log-WinFireMessage -Type INFO -Message "Compressing evidence to: $zipFilePath" -Quiet:$Quiet
+    Write-WinFireLog -Type INFO -Message "Compressing evidence to: $zipFilePath" -Quiet:$Quiet
 
     # Check disk space before compression (simplified check)
     $drive = Split-Path -Path $OutputPath -Parent
@@ -2423,15 +2476,15 @@ Function Compress-WinFireEvidence {
 
     if ($driveInfo) {
         $totalSizeMB = (Invoke-WinFireSafeOperation -Operation {
-            (Get-ChildItem -Path $OutputPath -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
-        } -OperationName "Calculate Output Directory Size" -Quiet:$Quiet)
-        if ($totalSizeMB -eq $null) { $totalSizeMB = 0 }
+                (Get-ChildItem -Path $OutputPath -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+            } -OperationName "Calculate Output Directory Size" -Quiet:$Quiet)
+        if ($null -eq $totalSizeMB) { $totalSizeMB = 0 }
 
         $requiredSpaceEstimateMB = $totalSizeMB * 1.0 # Assume no compression or slight expansion for safety
         $freeSpaceMB = $driveInfo.Free * 1MB
 
         if ($freeSpaceMB -lt $requiredSpaceEstimateMB) {
-            Log-WinFireMessage -Type WARN -Message "Low disk space detected on '$($driveInfo.Name)' drive. Free: $($freeSpaceMB / 1GB) GB, Estimated Required: $($requiredSpaceEstimateMB / 1GB) GB. Compression might fail." -Quiet:$Quiet
+            Write-WinFireLog -Type WARN -Message "Low disk space detected on '$($driveInfo.Name)' drive. Free: $($freeSpaceMB / 1GB) GB, Estimated Required: $($requiredSpaceEstimateMB / 1GB) GB. Compression might fail." -Quiet:$Quiet
             Get-WinFireSummaryEntry -Category "Evidence Packaging" -Description "Low disk space detected, compression might be impacted." -Status "Warning" -Details "Free: $([int]($freeSpaceMB / 1GB))GB, Est. Required: $([int]($requiredSpaceEstimateMB / 1GB))GB."
         }
     }
@@ -2440,10 +2493,11 @@ Function Compress-WinFireEvidence {
         # Check for presence of Compress-Archive (PS 5.0+)
         if (Get-Command Compress-Archive -ErrorAction SilentlyContinue) {
             Compress-Archive -Path $OutputPath -DestinationPath $zipFilePath -Force -ErrorAction Stop
-            Log-WinFireMessage -Type SUCCESS -Message "Evidence package created: $zipFilePath" -Quiet:$Quiet
+            Write-WinFireLog -Type SUCCESS -Message "Evidence package created: $zipFilePath" -Quiet:$Quiet
             Get-WinFireSummaryEntry -Category "Evidence Packaging" -Description "All collected artifacts compressed into a ZIP archive." -Status "Success" -Details "Archive: $(Split-Path $zipFilePath -Leaf)"
-        } else {
-            Log-WinFireMessage -Type WARN -Message "Compress-Archive cmdlet not found (requires PowerShell 5.0+). Skipping evidence packaging." -Quiet:$Quiet
+        }
+        else {
+            Write-WinFireLog -Type WARN -Message "Compress-Archive cmdlet not found (requires PowerShell 5.0+). Skipping evidence packaging." -Quiet:$Quiet
             Get-WinFireSummaryEntry -Category "Evidence Packaging" -Description "Skipped evidence packaging." -Status "Warning" -Details "Compress-Archive cmdlet not available (requires PS 5.0+)."
         }
     } -OperationName "Compress Evidence Package" -Quiet:$Quiet
@@ -2453,147 +2507,180 @@ Function Compress-WinFireEvidence {
 
 #region Main Script Execution
 
-# Display help if -Help is specified
+# -- Help -------------------------------------------------------------
 if ($Help) {
     Get-Help -Full $PSScriptRoot\$($MyInvocation.MyCommand.Name)
     exit 0
 }
 
-# Set global hash algorithm
+# -- Global Hash Algorithm --------------------------------------------
 $script:GlobalHashAlgorithm = $HashAlgorithm
 
-# Show banner
+# -- Banner -----------------------------------------------------------
 Show-WinFireBanner
 
-# Check for Administrator privileges (before logging is available)
+# -- Prerequisites ----------------------------------------------------
+if (-not (Test-WinFirePrerequisites -Quiet:$Quiet)) {
+    Write-Host "  [ABORT] Prerequisites not met. Exiting." -ForegroundColor Red
+    exit 2
+}
+
+# -- Admin Privileges -------------------------------------------------
 try {
     Test-WinFireAdminPrivileges
 } catch {
     Write-Warning "Could not verify administrator privileges: $_"
 }
 
-# Ensure OutputPath is valid (defense-in-depth against empty/null values)
+# -- Output Path Validation -------------------------------------------
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = $PWD.Path
     Write-Warning "OutputPath was empty, falling back to current directory: $OutputPath"
 }
 
-# Initialize output directory and logging
+# -- Initialize Output Directory & Logging ----------------------------
 New-WinFireOutputDirectory -BasePath $OutputPath -Quiet:$Quiet
 
-# Re-log admin status now that log file exists
-Log-WinFireMessage -Type INFO -Message "Administrator privileges confirmed (post-init)." -Quiet:$Quiet
+# -- Start Transcript -------------------------------------------------
+$transcriptPath = Join-Path $script:ResultsPath "WinFire_Transcript.txt"
+try {
+    Start-Transcript -Path $transcriptPath -Append -ErrorAction Stop | Out-Null
+    Write-WinFireLog -Type INFO -Message "Transcript logging to: $transcriptPath" -Quiet:$Quiet
+} catch {
+    Write-WinFireLog -Type WARN -Message "Could not start transcript: $_" -Quiet:$Quiet
+}
 
-# Initialize Chain of Custody early
+# -- Log Scan Configuration -------------------------------------------
+Write-WinFireLog -Type INFO -Message "Administrator privileges confirmed (post-init)." -Quiet:$Quiet
+
 Initialize-WinFireChainOfCustody -CaseNumber $CaseNumber -Investigator $Investigator -Purpose $Purpose
 
-Log-WinFireMessage -Type INFO -Message "WinFire scan started at $($script:StartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Quiet:$Quiet
-Log-WinFireMessage -Type INFO -Message "Running on: $($env:COMPUTERNAME) by $($env:USERNAME)" -Quiet:$Quiet
+Write-WinFireLog -Type INFO -Message "WinFire v$($script:Version) scan started at $($script:StartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Quiet:$Quiet
+Write-WinFireLog -Type INFO -Message "Running on: $($env:COMPUTERNAME) by $($env:USERNAME)" -Quiet:$Quiet
 
-# Fix for ternary operator in PS 5.1
 $scanModeMessage = ""
 if ($Quick.IsPresent) {
     $scanModeMessage = "Quick"
-} elseif ($Full.IsPresent) {
-    $scanModeMessage = "Full"
-} else {
-    $scanModeMessage = "Default (Full)"
-    $Full = $true # Ensure Full is implied if neither Quick nor Full is specified
 }
-Log-WinFireMessage -Type INFO -Message "Scan Mode: $($scanModeMessage)" -Quiet:$Quiet
-Log-WinFireMessage -Type INFO -Message "Hashing Algorithm: $HashAlgorithm" -Quiet:$Quiet
-
+elseif ($Full.IsPresent) {
+    $scanModeMessage = "Full"
+}
+else {
+    $scanModeMessage = "Default (Full)"
+    $Full = $true
+}
+Write-WinFireLog -Type INFO -Message "Scan Mode: $($scanModeMessage)" -Quiet:$Quiet
+Write-WinFireLog -Type INFO -Message "Hashing Algorithm: $HashAlgorithm" -Quiet:$Quiet
 
 # Adjust TotalTasks based on exclusions
 if ($ExcludeNetwork) { $script:TotalTasks-- }
 if ($ExcludeBrowser) { $script:TotalTasks-- }
 
-# Main scan functions
+# -- Scan Execution ---------------------------------------------------
 try {
+    # Phase 1: System Baseline
+    Write-WinFireLog -Type INFO -Message "-- Phase 1/6: System Baseline --" -Quiet:$Quiet
     Get-WinFireSystemInfo -Quick:$Quick -Quiet:$Quiet
     Get-WinFireUserAccounts -Quick:$Quick -Quiet:$Quiet
     Get-WinFireProcessServiceAnalysis -HashAlgorithm $HashAlgorithm -Quick:$Quick -Quiet:$Quiet
 
+    # Phase 2: Network Analysis
+    Write-WinFireLog -Type INFO -Message "-- Phase 2/6: Network Analysis --" -Quiet:$Quiet
     if (-not $ExcludeNetwork) {
         Get-WinFireNetworkAnalysis -Quiet:$Quiet
-    } else {
+    }
+    else {
         Get-WinFireSummaryEntry -Category "Network" -Description "Network analysis skipped as requested." -Status "Skipped" -Details "Excluded by -ExcludeNetwork parameter."
-        $script:ProgressCounter++ # Increment counter for skipped task
+        $script:ProgressCounter++
     }
 
+    # Phase 3: File System & Registry
+    Write-WinFireLog -Type INFO -Message "-- Phase 3/6: File System & Registry --" -Quiet:$Quiet
     Get-WinFireFileSystemAnalysis -HashAlgorithm $HashAlgorithm -Quick:$Quick -Quiet:$Quiet
     Get-WinFireRegistryAnalysis -Quick:$Quick -Quiet:$Quiet
-    Get-WinFireEventLogAnalysis -Quick:$Quick -Quiet:$Quiet
 
-    # Persistence mechanisms are broadly covered by Process/Service and Registry functions
+    # Phase 4: Event Logs & Browser
+    Write-WinFireLog -Type INFO -Message "-- Phase 4/6: Event Logs & Browser Forensics --" -Quiet:$Quiet
+    Get-WinFireEventLogAnalysis -Quick:$Quick -Quiet:$Quiet
     Get-WinFireSummaryEntry -Category "Persistence Mechanisms" -Description "Persistence mechanisms covered by Process/Service and Registry scans." -Status "Info" -Details "Check 'Running_Processes.csv', 'Services.csv', 'Scheduled_Tasks.csv', 'WMI_Event_Subscriptions.csv', 'Registry_Autoruns_Persistence.csv' for details."
     $script:ProgressCounter++
 
     if (-not $ExcludeBrowser) {
         Get-WinFireBrowserForensics -HashAlgorithm $HashAlgorithm -Quiet:$Quiet
-    } else {
+    }
+    else {
         Get-WinFireSummaryEntry -Category "Browser Forensics" -Description "Browser forensics skipped as requested." -Status "Skipped" -Details "Excluded by -ExcludeBrowser parameter."
-        $script:ProgressCounter++ # Increment counter for skipped task
+        $script:ProgressCounter++
     }
 
-    # Memory Analysis - only indicators in pure PS
+    # Phase 5: Advanced Threat Detection
+    Write-WinFireLog -Type INFO -Message "-- Phase 5/6: Advanced Threat Detection --" -Quiet:$Quiet
     Get-WinFireMemoryAnalysisIndicators -Quiet:$Quiet
-
     Get-WinFireSecurityToolsDetection -Quiet:$Quiet
-
-    # New: PowerShell Activity Logging Check
     Get-WinFirePowerShellActivity -Quiet:$Quiet
-
-    # === NEW v2.0 FEATURES ===
-    # Defender Exclusions Analysis
     Get-WinFireDefenderExclusions -Quiet:$Quiet
-
-    # PowerShell Command History Collection
     Get-WinFirePowerShellHistory -Quiet:$Quiet
-
-    # RDP Session and Connection Analysis
     Get-WinFireRDPAnalysis -Quiet:$Quiet
-
-    # LOLBAS (Living-Off-The-Land) Detection
     Get-WinFireLOLBASDetection -Quiet:$Quiet
-
-    # Credential Harvesting Indicators
     Get-WinFireCredentialIndicators -Quiet:$Quiet
-
-    # Advanced Process Analysis (parent-child relationships, suspicious locations)
     Get-WinFireAdvancedProcessAnalysis -Quiet:$Quiet
-
-    # Jump List Analysis for user activity
     Get-WinFireJumpListAnalysis -Quiet:$Quiet
-
-    # LNK File Analysis for shortcut-based attacks
     Get-WinFireLNKAnalysis -Quiet:$Quiet
-
-    # Calculate Overall Threat Score (should be called after all other scans)
     Get-WinFireThreatScore -Quiet:$Quiet
 
-    # Final report generation and packaging
+    # Phase 6: Report Generation & Packaging
+    Write-WinFireLog -Type INFO -Message "-- Phase 6/6: Report Generation --" -Quiet:$Quiet
     New-WinFireHashManifest -CollectedFiles $script:CollectedFiles -OutputPath $script:ResultsPath
     New-WinFireHtmlReport -SummaryData $script:SummaryReport -OutputPath $script:ResultsPath -ChainOfCustody $script:ChainOfCustody
     Compress-WinFireEvidence -OutputPath $script:ResultsPath -Quiet:$Quiet
 
 }
 catch {
-    Log-WinFireMessage -Type ERROR -Message "A critical error occurred during the WinFire scan: $_" -Quiet:$Quiet
+    $script:ExitCode = 1
+    Write-WinFireLog -Type ERROR -Message "A critical error occurred during the WinFire scan: $_" -Quiet:$Quiet
     Get-WinFireSummaryEntry -Category "Overall Scan" -Description "Script terminated due to critical error." -Status "Failed" -Details "$_"
 }
 finally {
     $script:EndTime = Get-Date
     $duration = ($script:EndTime - $script:StartTime).ToString("hh\:mm\:ss")
-    Log-WinFireMessage -Type INFO -Message "WinFire scan finished at $($script:EndTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Quiet:$Quiet
-    Log-WinFireMessage -Type INFO -Message "Total scan duration: $duration" -Quiet:$Quiet
-    Log-WinFireMessage -Type SUCCESS -Message "WinFire scan completed! Check '$($script:ResultsPath)' for results." -Quiet:$Quiet
-    Write-Host "`n"
-    Write-Host "=====================================================================" -ForegroundColor Green
-    Write-Host " WinFire Scan Completed! Results saved to: $($script:ResultsPath)" -ForegroundColor Green
-    Write-Host " Total Duration: $duration" -ForegroundColor Green
-    Write-Host " Review the 'WinFire_Executive_Summary.html' for an overview." -ForegroundColor Green
-    Write-Host "=====================================================================" -ForegroundColor Green
+
+    # -- Save Operation Metrics ---------------------------------------
+    if ($script:ResultsPath -and (Test-Path $script:ResultsPath -ErrorAction SilentlyContinue)) {
+        try {
+            $script:OperationMetrics | Export-Csv -Path (Join-Path $script:ResultsPath "Reports\Operation_Metrics.csv") -NoTypeInformation -Encoding UTF8 -Force -ErrorAction SilentlyContinue
+        } catch { }
+    }
+
+    # -- Execution Summary --------------------------------------------
+    $successOps = ($script:OperationMetrics | Where-Object { $_.Status -eq 'Success' }).Count
+    $failedOps  = ($script:OperationMetrics | Where-Object { $_.Status -notin @('Success') }).Count
+    $totalOps   = $script:OperationMetrics.Count
+
+    Write-WinFireLog -Type INFO -Message "WinFire scan finished at $($script:EndTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Quiet:$Quiet
+    Write-WinFireLog -Type INFO -Message "Total scan duration: $duration" -Quiet:$Quiet
+
+    Write-Host ""
+    Write-Host "  -- WinFire Execution Summary ----------------------------------" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  Status     : " -ForegroundColor Gray -NoNewline
+    if ($script:ExitCode -eq 0) {
+        Write-Host "COMPLETED" -ForegroundColor Green
+    } else {
+        Write-Host "COMPLETED WITH ERRORS" -ForegroundColor Yellow
+    }
+    Write-Host "  Duration   : $duration" -ForegroundColor Gray
+    Write-Host "  Operations : $totalOps total, $successOps succeeded, $failedOps failed" -ForegroundColor Gray
+    Write-Host "  Output     : $($script:ResultsPath)" -ForegroundColor Gray
+    Write-Host "  Report     : WinFire_Executive_Summary.html" -ForegroundColor Gray
+    Write-Host "  Metrics    : Reports\Operation_Metrics.csv" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host ""
+
+    # -- Stop Transcript ----------------------------------------------
+    try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+
+    exit $script:ExitCode
 }
 
 #endregion

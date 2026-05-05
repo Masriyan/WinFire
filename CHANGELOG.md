@@ -9,35 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.2] - 2026-05-05
 
-### 🔧 Patch Release - Critical Variable Scope Bug Fix
+### Enterprise-Grade Hardening Release
 
-This release fixes the **root cause** of all startup errors: a variable naming collision between
-the `$OutputPath` script parameter and the `$script:OutputPath` internal variable.
+This release transforms WinFire into an enterprise-grade forensic tool with centralized
+configuration, phased execution, operation metrics, and comprehensive audit trails.
+
+### Added
+
+| Feature                      | Description                                                             |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| **Centralized Version**      | `$script:Version` constant replaces all hardcoded version strings       |
+| **Prerequisites Validation** | `Test-WinFirePrerequisites` checks PS >= 5.1 and Windows OS at startup  |
+| **Professional Banner**      | Shows hostname, user, privilege level, PS version, OS, start time       |
+| **Phased Execution**         | 6 named phases with clear log markers                                   |
+| **Operation Metrics**        | Per-operation `Stopwatch` timing, exported to `Operation_Metrics.csv`   |
+| **Transcript Logging**       | Full PowerShell transcript to `WinFire_Transcript.txt`                  |
+| **Graceful Shutdown**        | `$script:CancelRequested` flag checked before each operation            |
+| **Exit Codes**               | `0` success, `1` error, `2` prerequisites failed                       |
+| **Execution Summary**        | Professional summary with status, duration, operation counts            |
 
 ### Fixed
 
 | Bug | Root Cause | Fix |
 | --- | ---------- | --- |
-| `Join-Path` empty 'Path' errors (Lines 278-279) | `$script:OutputPath = $null` on Line 122 **overwrites** the `$OutputPath` parameter (same scope in `.ps1` files) | Renamed internal variable to `$script:ResultsPath` to eliminate collision |
-| `Test-WinFireAdminPrivileges` not recognized | Cascading failure from the variable scope bug | Wrapped call in `try/catch` for resilience |
-| `New-WinFireOutputDirectory` empty path | `$OutputPath` parameter was `$null` when passed as `$BasePath` | Added `[ValidateNotNullOrEmpty()]` + fallback to `$PWD.Path` |
-| `$oldErrorActionPreference` unset under StrictMode | Variable declared inside `try{}` but referenced in `finally{}` | Moved initialization before the `try` block |
+| `Join-Path` empty 'Path' errors | `$script:OutputPath = $null` overwrites `$OutputPath` parameter | Renamed to `$script:ResultsPath` |
+| `Test-WinFireAdminPrivileges` crash | Unhandled exception cascades | Wrapped in `try/catch` |
+| `New-WinFireOutputDirectory` empty path | No parameter validation | Added `[ValidateNotNullOrEmpty()]` |
+| `$oldErrorActionPreference` unset | Declared inside `try{}`, used in `finally{}` | Moved before `try` block |
+| `Log-WinFireMessage` unapproved verb | PSScriptAnalyzer warning | Renamed to `Write-WinFireLog` |
+| `$profile` automatic variable conflict | Shadows PowerShell's `$PROFILE` | Renamed to `$userProfile` |
+| `$event` automatic variable conflict | Shadows PowerShell's `$Event` | Renamed to `$logEvent` |
+| `$null` on wrong side of comparison | PSScriptAnalyzer warning | Flipped to `$null -eq $var` |
+| `$dnsEntries` assigned but unused | Dead code | Removed |
+| `$persistenceKeys` assigned but unused | Dead code | Removed |
+| `$hash` assigned but unused | Unused Get-FileHashSafe call | Removed |
+| Unicode parse errors on PS 5.1 | Box-drawing characters in string literals | Replaced with ASCII |
 
 ### Changed
 
 | Item | Before | After |
 | ---- | ------ | ----- |
-| Script size | 2587 lines | 2599 lines |
-| Internal results variable | `$script:OutputPath` (collides with param) | `$script:ResultsPath` (no collision) |
-| `$BasePath` parameter | No validation | `[Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()]` |
-| `Test-WinFireAdminPrivileges` call | Bare call, crash on failure | `try/catch` wrapped |
-| `$oldErrorActionPreference` | Set inside `try{}` | Set before `try{}` (StrictMode safe) |
+| Script lines | 2599 | 2686 |
+| Function count | 33 | 34 (+Test-WinFirePrerequisites) |
+| Internal results variable | `$script:OutputPath` | `$script:ResultsPath` |
+| Log function name | `Log-WinFireMessage` | `Write-WinFireLog` |
+| Banner | ASCII art + Unicode box | Clean text with system context |
+| Execution flow | Flat function list | 6 phased scan pipeline |
+| Error output | Generic completion message | Structured execution summary |
+| File encoding | Mixed | UTF-8 with BOM (ASCII-only content) |
+
+### New Output Files
+
+```
+Reports/
++-- Operation_Metrics.csv       # Per-operation timing and status
+
+WinFire_Transcript.txt          # Full PowerShell transcript
+```
 
 ---
 
 ## [2.0.1] - 2026-05-05
 
-### 🔧 Patch Release - Startup Bug Fixes
+### Patch Release - Startup Bug Fixes
 
 This release fixes 5 errors that prevented WinFire from executing properly.
 
@@ -45,28 +79,17 @@ This release fixes 5 errors that prevented WinFire from executing properly.
 
 | Bug | Root Cause | Fix |
 | --- | ---------- | --- |
-| `Author:` not recognized as cmdlet | Pipe `\|` in banner string parsed as PowerShell pipeline operator | Removed pipe character, split into separate `Write-Host` calls |
-| `Cannot bind argument to 'Path'` (null) | `Log-WinFireMessage` called before `New-WinFireOutputDirectory` initialized `$script:LogPath` | Added null/existence guard clause before file writes |
-| `Privileges` property not found | `WindowsIdentity.Privileges` does not exist in .NET Framework | Replaced with `whoami /priv` output parsing |
-| `Test-WinFireAdminPrivileges` not recognized | Function lacked `[CmdletBinding()]` but was called with `-ErrorAction Stop` under strict mode | Added `[CmdletBinding()]` attribute; removed `-ErrorAction Stop` from call site |
-| Multiple log write warnings during startup | Admin privilege check ran before output directory existed | Added graceful pre-init fallback for early log writes |
-
-### Changed
-
-| Item | Before | After |
-| ---- | ------ | ----- |
-| Script size | 2576 lines | 2587 lines |
-| Banner format | `Version: 2.0 \| Author: sudo3rs` | `Version: 2.0  Author: sudo3rs` |
-| Privilege check | `.Privileges` property (broken) | `whoami /priv` parsing (reliable) |
-| Execution order | Banner → Admin check → Directory init | Banner → Admin check (console-only) → Directory init → Log confirmation |
+| `Author:` not recognized as cmdlet | Pipe `\|` in banner string parsed as pipeline operator | Removed pipe character |
+| `Cannot bind argument to 'Path'` (null) | `Log-WinFireMessage` called before `$script:LogPath` initialized | Added null guard clause |
+| `Privileges` property not found | `WindowsIdentity.Privileges` does not exist in .NET | Replaced with `whoami /priv` parsing |
+| `Test-WinFireAdminPrivileges` not recognized | Function lacked `[CmdletBinding()]` | Added attribute |
+| Multiple log write warnings | Admin check ran before output directory existed | Reordered execution |
 
 ---
 
 ## [2.0.0] - 2026-01-29
 
-### 🚀 Major Release - Threat Detection & Enhanced Analysis
-
-This release transforms WinFire from a collection tool into a comprehensive threat detection and forensic analysis platform.
+### Major Release - Threat Detection & Enhanced Analysis
 
 ### Added
 
@@ -76,7 +99,7 @@ This release transforms WinFire from a collection tool into a comprehensive thre
 | ----------------------------- | ---------------------------------------------------------------------------------- |
 | **LOLBAS Detection**          | Detect abuse of certutil, mshta, regsvr32, wmic, bitsadmin, and 10+ other binaries |
 | **Credential Indicators**     | Detect LSASS access events, credential dumping tools, SAM/SECURITY hive copies     |
-| **Advanced Process Analysis** | Identify suspicious parent-child relationships (e.g., Word → PowerShell)           |
+| **Advanced Process Analysis** | Identify suspicious parent-child relationships (e.g., Word -> PowerShell)          |
 | **Threat Scoring**            | Automated 0-100 threat score with Low/Medium/High/Critical risk levels             |
 
 #### New Artifact Collection
@@ -89,136 +112,31 @@ This release transforms WinFire from a collection tool into a comprehensive thre
 | **Jump List Analysis**  | Collect user activity from Jump Lists                            |
 | **LNK File Analysis**   | Parse shortcuts for malicious targets and arguments              |
 
-#### UI/UX Improvements
-
-- 🔥 Enhanced ASCII art banner with animated flame effects
-- 🌐 GitHub repository URL display in banner
-- 📊 Color-coded output with severity levels
-
-#### Documentation
-
-- 📖 `CONTRIBUTING.md` - Comprehensive contributor guidelines
-- 🔒 `SECURITY.md` - Security policy with AV handling guidance
-- 📝 `CHANGELOG.md` - Version history (this file)
-- ⚠️ "Before You Use" section with AV detection warnings
-
 ### Fixed
 
 | Bug                  | Fix                                                               |
 | -------------------- | ----------------------------------------------------------------- |
 | `Get-CService` typo  | Changed to `Get-Service` with additional Win32_Service collection |
 | Extension matching   | Fixed `-in` operator to use `-contains` with proper dot stripping |
-| Environment variable | Fixed `$env:ProgramFilesx86` → `${env:ProgramFiles(x86)}` syntax  |
-| Service collection   | Now collects both Get-Service and Win32_Service data              |
-
-### Changed
-
-| Item           | Before                | After                 |
-| -------------- | --------------------- | --------------------- |
-| Script size    | ~1900 lines           | 2576 lines            |
-| Function count | 12 forensic functions | 21 forensic functions |
-| TotalTasks     | 30                    | 40                    |
-| WinFireVersion | 1.0                   | 2.0                   |
-
-### New Output Files
-
-```
-Raw_Data/
-├── Defender_Exclusions.csv/.json      # NEW
-├── PowerShell_History.csv/.json       # NEW
-├── RDP_Analysis.csv/.json             # NEW
-├── LOLBAS_Detection.csv/.json         # NEW
-├── Credential_Indicators.csv/.json    # NEW
-├── Advanced_Process_Analysis.csv/.json # NEW
-├── Threat_Score.csv/.json             # NEW
-├── JumpList_Analysis.csv/.json        # NEW
-└── LNK_Analysis.csv/.json             # NEW
-```
+| Environment variable | Fixed `$env:ProgramFilesx86` syntax                               |
 
 ---
 
 ## [1.0.0] - 2024-XX-XX
 
-### 🎉 Initial Release
+### Initial Release
 
 First public release of WinFire - Windows Forensic Incident Response Engine.
 
-### Added
-
-#### Core Collection Features
-
-- **System Information** - OS, hardware, software inventory
-- **User Accounts** - Local users, groups, profile artifacts
-- **Process Analysis** - Running processes with command lines and hashes
-- **Service Enumeration** - Windows services and startup types
-- **Scheduled Tasks** - Task scheduler entries
-- **WMI Subscriptions** - WMI event persistence detection
-
-#### Network Forensics
-
-- **Active Connections** - TCP/UDP with owning processes
-- **Listening Ports** - All listening services
-- **Network Shares** - Local and mapped shares
-- **Firewall Rules** - Windows Firewall configuration
-- **SMB Sessions** - Open SMB connections
-
-#### File System Artifacts
-
-- **Amcache.hve** - Application execution artifacts
-- **Prefetch** - Program execution evidence
-- **SRUM Database** - System resource usage
-- **Timeline Database** - Windows Timeline data
-- **BITS Jobs** - Background transfer service activity
-
-#### Registry Analysis
-
-- **Autorun Keys** - Persistence mechanisms
-- **USB History** - Connected USB devices
-- **Recent Documents** - MRU lists
-- **COM Hijacking** - COM object manipulation
-- **Network Drives** - Mapped drive history
-
-#### Event Log Collection
-
-- **Security Log** - Logons, privilege use, account changes
-- **System Log** - Service changes, boot/shutdown
-- **Application Log** - Crashes, errors
-- **PowerShell Log** - Script execution events
-- **Defender Log** - Malware detections
-
-#### Browser Forensics
-
-- **Chrome** - Profile data collection
-- **Edge** - Profile data collection
-- **Firefox** - Profile data collection
-- Robust RoboCopy handling for locked files
-
-#### Security Tool Detection
-
-- **Windows Defender** - Status and configuration
-- **Third-party AV** - Installed antivirus products
-- **EDR/XDR Agents** - Common EDR detection
-
-#### Memory Indicators
-
-- **Loaded DLLs** - Non-system DLL enumeration
-- **Process Hollowing** - Suspicious memory indicators
-- **DLL Injection** - Injection detection heuristics
-
-#### Reporting
-
-- **HTML Report** - Executive summary with findings
-- **Hash Manifest** - SHA256 hashes of all files
-- **Chain of Custody** - JSON documentation
-- **Evidence Compression** - ZIP archive creation
-
-#### Execution Modes
-
-- **Quick Mode** - Fast, high-impact artifacts
-- **Full Mode** - Comprehensive collection
-- **ExcludeNetwork** - Skip network analysis
-- **ExcludeBrowser** - Skip browser forensics
-- **Quiet Mode** - Suppress console output
+- Core forensic collection: System, Users, Processes, Services, Scheduled Tasks, WMI
+- Network forensics: TCP/UDP, Firewall, SMB, Shares
+- File system artifacts: Amcache, Prefetch, SRUM, Timeline, BITS
+- Registry analysis: Autoruns, USB, MRU, COM Hijacking
+- Event log collection: Security, System, Application, PowerShell, Defender
+- Browser forensics: Chrome, Edge, Firefox with RoboCopy
+- Security tool detection: Defender, AV, EDR
+- Memory indicators: DLLs, hollowing, injection
+- Reporting: HTML, Hash Manifest, Chain of Custody, ZIP
 
 ---
 
@@ -227,19 +145,18 @@ First public release of WinFire - Windows Forensic Incident Response Engine.
 | Feature               | v1.0 | v2.0 | v2.0.1 | v2.0.2 |
 | --------------------- | ---- | ---- | ------ | ------ |
 | Forensic Functions    | 12   | 21   | 21     | 21     |
-| Threat Detection      | ❌   | ✅   | ✅     | ✅     |
-| LOLBAS Detection      | ❌   | ✅   | ✅     | ✅     |
-| Credential Indicators | ❌   | ✅   | ✅     | ✅     |
-| Threat Scoring        | ❌   | ✅   | ✅     | ✅     |
-| RDP Analysis          | ❌   | ✅   | ✅     | ✅     |
-| Jump Lists            | ❌   | ✅   | ✅     | ✅     |
-| LNK Parsing           | ❌   | ✅   | ✅     | ✅     |
-| Enhanced Banner       | ❌   | ✅   | ✅     | ✅     |
-| AV Warning Docs       | ❌   | ✅   | ✅     | ✅     |
-| Reliable Startup      | ✅   | ❌   | ❌     | ✅     |
-| Privilege Check       | N/A  | ❌   | ✅     | ✅     |
-| Variable Scope Safety | ✅   | ❌   | ❌     | ✅     |
-| StrictMode Safe       | N/A  | ❌   | ❌     | ✅     |
+| Threat Detection      | -    | Yes  | Yes    | Yes    |
+| LOLBAS Detection      | -    | Yes  | Yes    | Yes    |
+| Credential Indicators | -    | Yes  | Yes    | Yes    |
+| Threat Scoring        | -    | Yes  | Yes    | Yes    |
+| Reliable Startup      | Yes  | No   | No     | Yes    |
+| StrictMode Safe       | N/A  | No   | No     | Yes    |
+| Prerequisites Check   | -    | -    | -      | Yes    |
+| Operation Metrics     | -    | -    | -      | Yes    |
+| Transcript Logging    | -    | -    | -      | Yes    |
+| Phased Execution      | -    | -    | -      | Yes    |
+| Exit Codes            | -    | -    | -      | Yes    |
+| Graceful Shutdown     | -    | -    | -      | Yes    |
 
 ---
 

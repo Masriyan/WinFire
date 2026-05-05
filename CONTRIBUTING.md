@@ -79,7 +79,7 @@ git merge upstream/main
 | ---------------- | -------------------- | ---------------------------- |
 | Functions        | `Get-WinFire*`       | `Get-WinFireNetworkAnalysis` |
 | Variables        | `$camelCase`         | `$processData`               |
-| Script Variables | `$script:PascalCase` | `$script:OutputPath`         |
+| Script Variables | `$script:PascalCase` | `$script:ResultsPath`        |
 | Parameters       | `PascalCase`         | `[string]$OutputPath`        |
 
 ### Required Patterns
@@ -90,26 +90,30 @@ $data = Invoke-WinFireSafeOperation -Operation {
     # Your code here
 } -OperationName "Operation Name" -Quiet:$Quiet
 
-# ✅ Use standard logging
-Log-WinFireMessage -Type INFO -Message "Message" -Quiet:$Quiet
+# Use standard logging
+Write-WinFireLog -Type INFO -Message "Message" -Quiet:$Quiet
 
-# ✅ Use standard data export
+# Use standard data export
 Save-WinFireData -Data $data -FileName "Output_Name" -Quiet:$Quiet
 
-# ✅ Add summary entry
+# Add summary entry
 Get-WinFireSummaryEntry -Category "Category" -Description "What was done" -Status "Success" -Details "Extra info"
 ```
 
 ### Code Quality
 
-- ✅ Handle null/empty data gracefully
-- ✅ Use `-ErrorAction SilentlyContinue` where appropriate
-- ✅ Document function purpose with `<# .SYNOPSIS #>`
-- ✅ Add `[CmdletBinding()]` to all functions (required for StrictMode compatibility)
-- ✅ Keep lines under 120 characters
-- ❌ No hardcoded paths (use environment variables)
-- ❌ No Write-Host without -Quiet handling
-- ❌ No direct `.Privileges` or other non-existent .NET properties (verify API exists)
+- Handle null/empty data gracefully
+- Use `-ErrorAction SilentlyContinue` where appropriate
+- Document function purpose with `<# .SYNOPSIS #>`
+- Add `[CmdletBinding()]` to all functions (required for StrictMode compatibility)
+- Keep lines under 120 characters
+- Use `$script:Version` constant instead of hardcoding version strings
+- Use ASCII-only characters in string literals (no Unicode box-drawing)
+- Place `$null` on the left side of equality comparisons
+- Avoid using PowerShell automatic variable names (`$profile`, `$event`, etc.)
+- No hardcoded paths (use environment variables)
+- No `Write-Host` without `-Quiet` handling
+- No direct `.Privileges` or other non-existent .NET properties (verify API exists)
 
 ## 📝 Function Template
 
