@@ -156,10 +156,10 @@ Function Show-WinFireBanner {
     Write-Host "Windows Forensic Incident Response Engine" -ForegroundColor Cyan -NoNewline
     Write-Host "              ║" -ForegroundColor DarkGray
     Write-Host "  ║   " -ForegroundColor DarkGray -NoNewline
-    Write-Host "Version: 2.0" -ForegroundColor Green -NoNewline
-    Write-Host "  |  Author: " -ForegroundColor DarkGray -NoNewline
+    Write-Host "Version: 2.0  " -ForegroundColor Green -NoNewline
+    Write-Host "Author: " -ForegroundColor DarkGray -NoNewline
     Write-Host "sudo3rs" -ForegroundColor Yellow -NoNewline
-    Write-Host "                        ║" -ForegroundColor DarkGray
+    Write-Host "                           ║" -ForegroundColor DarkGray
     Write-Host "  ║   " -ForegroundColor DarkGray -NoNewline
     Write-Host "https://github.com/Masriyan/WinFire" -ForegroundColor Blue -NoNewline
     Write-Host "                       ║" -ForegroundColor DarkGray
@@ -177,6 +177,7 @@ Function Test-WinFireAdminPrivileges {
     .SYNOPSIS
         Checks if the script is running with administrator privileges and required forensic privileges.
     #>
+    [CmdletBinding()]
     param()
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
@@ -193,16 +194,20 @@ Function Test-WinFireAdminPrivileges {
     $requiredPrivileges = @("SeDebugPrivilege", "SeBackupPrivilege", "SeRestorePrivilege")
     $missingPrivileges = @()
 
-    foreach ($priv in $requiredPrivileges) {
-        try {
-            $hasPriv = ([System.Security.Principal.WindowsIdentity]::GetCurrent().Privileges | Where-Object { $_.Name -eq $priv -and $_.Attributes -match 'Enabled' })
-            if (-not $hasPriv) {
+    try {
+        $whoamiOutput = whoami /priv 2>$null | Out-String
+        foreach ($priv in $requiredPrivileges) {
+            if ($whoamiOutput -match $priv) {
+                if ($whoamiOutput -notmatch "$priv\s+.*Enabled") {
+                    $missingPrivileges += $priv
+                }
+            } else {
                 $missingPrivileges += $priv
             }
         }
-        catch {
-            Log-WinFireMessage -Type WARN -Message "Could not check privilege '$priv': $_" -Quiet:$Quiet
-        }
+    }
+    catch {
+        Log-WinFireMessage -Type WARN -Message "Could not check privileges via whoami: $_" -Quiet:$Quiet
     }
 
     if ($missingPrivileges.Count -gt 0) {
@@ -237,12 +242,14 @@ Function Log-WinFireMessage {
     $timestamp = (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff")
     $logEntry = "[$timestamp] [$Type] $Message"
 
-    # Write to log file
-    try {
-        Add-Content -Path $script:LogPath -Value $logEntry -ErrorAction Stop
-    }
-    catch {
-        Write-Warning "Could not write to log file: $_. Log Entry: $logEntry"
+    # Write to log file (skip if LogPath not yet initialized)
+    if ($script:LogPath -and (Test-Path (Split-Path $script:LogPath -Parent) -ErrorAction SilentlyContinue)) {
+        try {
+            Add-Content -Path $script:LogPath -Value $logEntry -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Could not write to log file: $_. Log Entry: $logEntry"
+        }
     }
 
     # Write to console based on type and Quiet parameter
@@ -2456,11 +2463,14 @@ $script:GlobalHashAlgorithm = $HashAlgorithm
 # Show banner
 Show-WinFireBanner
 
-# Check for Administrator privileges
-Test-WinFireAdminPrivileges -ErrorAction Stop
+# Check for Administrator privileges (before logging is available)
+Test-WinFireAdminPrivileges
 
 # Initialize output directory and logging
 New-WinFireOutputDirectory -BasePath $OutputPath -Quiet:$Quiet
+
+# Re-log admin status now that log file exists
+Log-WinFireMessage -Type INFO -Message "Administrator privileges confirmed (post-init)." -Quiet:$Quiet
 
 # Initialize Chain of Custody early
 Initialize-WinFireChainOfCustody -CaseNumber $CaseNumber -Investigator $Investigator -Purpose $Purpose
