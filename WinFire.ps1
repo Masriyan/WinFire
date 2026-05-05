@@ -119,7 +119,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 
 # Global variables for output paths
-$script:OutputPath      = $null
+$script:ResultsPath      = $null
 $script:LogPath         = $null
 $script:SummaryReport   = @() # Stores key findings for the HTML report
 $script:CollectedFiles  = @() # Stores info about collected files for hash manifest
@@ -272,18 +272,20 @@ Function New-WinFireOutputDirectory {
         The base path where the output directory will be created.
     #>
     param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$BasePath
     )
     $timestampDir = (Get-Date -Format "yyyyMMdd_HHmmss")
-    $script:OutputPath = Join-Path -Path $BasePath -ChildPath "WinFire_Results_$timestampDir"
-    $script:LogPath = Join-Path -Path $script:OutputPath -ChildPath "WinFire_ExecutionLog.txt"
+    $script:ResultsPath = Join-Path -Path $BasePath -ChildPath "WinFire_Results_$timestampDir"
+    $script:LogPath = Join-Path -Path $script:ResultsPath -ChildPath "WinFire_ExecutionLog.txt"
 
     try {
-        New-Item -ItemType Directory -Path $script:OutputPath -ErrorAction Stop | Out-Null
-        New-Item -ItemType Directory -Path (Join-Path $script:OutputPath "Raw_Data") -ErrorAction Stop | Out-Null
-        New-Item -ItemType Directory -Path (Join-Path $script:OutputPath "Collected_Artifacts") -ErrorAction Stop | Out-Null
-        New-Item -ItemType Directory -Path (Join-Path $script:OutputPath "Reports") -ErrorAction Stop | Out-Null
-        Log-WinFireMessage -Type INFO -Message "Output directory created: $($script:OutputPath)" -Quiet:$Quiet
+        New-Item -ItemType Directory -Path $script:ResultsPath -ErrorAction Stop | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $script:ResultsPath "Raw_Data") -ErrorAction Stop | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $script:ResultsPath "Collected_Artifacts") -ErrorAction Stop | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $script:ResultsPath "Reports") -ErrorAction Stop | Out-Null
+        Log-WinFireMessage -Type INFO -Message "Output directory created: $($script:ResultsPath)" -Quiet:$Quiet
         Log-WinFireMessage -Type INFO -Message "Logging to: $($script:LogPath)" -Quiet:$Quiet
     }
     catch {
@@ -337,8 +339,8 @@ Function Save-WinFireData {
         [string]$FileName,
         [switch]$Quiet
     )
-    $csvPath = Join-Path -Path $script:OutputPath -ChildPath "Raw_Data\$FileName.csv"
-    $jsonPath = Join-Path -Path $script:OutputPath -ChildPath "Raw_Data\$FileName.json"
+    $csvPath = Join-Path -Path $script:ResultsPath -ChildPath "Raw_Data\$FileName.csv"
+    $jsonPath = Join-Path -Path $script:ResultsPath -ChildPath "Raw_Data\$FileName.json"
 
     if ($Data -and $Data.Count -gt 0) {
         try {
@@ -426,9 +428,9 @@ Function Invoke-WinFireSafeOperation {
 
     Log-WinFireMessage -Type INFO -Message "Starting '$OperationName'..." -Quiet:$Quiet
     $result = $null
+    $oldErrorActionPreference = $ErrorActionPreference
     try {
         # Temporarily change ErrorActionPreference for the scriptblock to capture specific errors
-        $oldErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Stop'
         $result = & $Operation
         $ErrorActionPreference = $oldErrorActionPreference # Restore original preference
@@ -495,12 +497,12 @@ Function Initialize-WinFireChainOfCustody {
         NtOsKrnlHash    = $kernelHash
         WinFireVersion  = "2.0"
         ScanStartTime   = $script:StartTime.ToString('yyyy-MM-dd HH:mm:ss')
-        OutputDirectory = $script:OutputPath
+        OutputDirectory = $script:ResultsPath
         ExecutionLog    = $script:LogPath
     }
 
     $custodyInfoJson = $script:ChainOfCustody | ConvertTo-Json -Depth 5 -Compress
-    Set-Content -Path (Join-Path $script:OutputPath "Reports\Chain_Of_Custody.json") -Value $custodyInfoJson -Encoding UTF8 -Force
+    Set-Content -Path (Join-Path $script:ResultsPath "Reports\Chain_Of_Custody.json") -Value $custodyInfoJson -Encoding UTF8 -Force
     Log-WinFireMessage -Type INFO -Message "Chain of Custody information initialized and saved." -Quiet:$Quiet
     Get-WinFireSummaryEntry -Category "Chain of Custody" -Description "Basic chain of custody information collected." -Status "Success" -Details "Case: $CaseNumber, Investigator: $Investigator"
 }
@@ -966,7 +968,7 @@ Function Get-WinFireFileSystemAnalysis {
     # Collect Amcache.hve (important for execution artifacts)
     $amcachePath = "$env:SystemRoot\AppCompat\Programs\Amcache.hve"
     if (Test-Path $amcachePath) {
-        $destAmcache = Join-Path $script:OutputPath "Collected_Artifacts\Amcache.hve"
+        $destAmcache = Join-Path $script:ResultsPath "Collected_Artifacts\Amcache.hve"
         Invoke-WinFireSafeOperation -Operation {
             Copy-Item -Path $amcachePath -Destination $destAmcache -Force -ErrorAction Stop
             $hash = Get-FileHashSafe -FilePath $destAmcache -Algorithm $HashAlgorithm
@@ -979,7 +981,7 @@ Function Get-WinFireFileSystemAnalysis {
     # Collect Prefetch files
     $prefetchSource = "$env:SystemRoot\Prefetch"
     if (Test-Path $prefetchSource) {
-        $destPrefetch = Join-Path $script:OutputPath "Collected_Artifacts\Prefetch"
+        $destPrefetch = Join-Path $script:ResultsPath "Collected_Artifacts\Prefetch"
         New-Item -ItemType Directory -Path $destPrefetch -ErrorAction SilentlyContinue | Out-Null
         $pfFiles = Invoke-WinFireSafeOperation -Operation {
             Get-ChildItem -Path $prefetchSource -Filter "*.pf" -ErrorAction SilentlyContinue | Copy-Item -Destination $destPrefetch -Force -PassThru
@@ -998,7 +1000,7 @@ Function Get-WinFireFileSystemAnalysis {
     # Collect SRUM Database
     $srumPath = "$env:SystemRoot\System32\sru\SRUDB.dat"
     if (Test-Path $srumPath) {
-        $destSrum = Join-Path $script:OutputPath "Collected_Artifacts\SRUDB.dat"
+        $destSrum = Join-Path $script:ResultsPath "Collected_Artifacts\SRUDB.dat"
         Invoke-WinFireSafeOperation -Operation {
             Copy-Item -Path $srumPath -Destination $destSrum -Force -ErrorAction Stop
             $hash = Get-FileHashSafe -FilePath $destSrum -Algorithm $HashAlgorithm
@@ -1017,7 +1019,7 @@ Function Get-WinFireFileSystemAnalysis {
             $username = (New-Object System.Security.Principal.SecurityIdentifier $profile.Sid).Translate([System.Security.Principal.NTAccount]).Value
             $timelinePath = Join-Path $profile.LocalPath "AppData\Local\Microsoft\Windows\ActivitiesCache.db"
             if (Test-Path $timelinePath) {
-                $destTimelineDir = Join-Path $script:OutputPath "Collected_Artifacts\Timeline\$username"
+                $destTimelineDir = Join-Path $script:ResultsPath "Collected_Artifacts\Timeline\$username"
                 New-Item -ItemType Directory -Path $destTimelineDir -ErrorAction SilentlyContinue | Out-Null
                 $destTimeline = Join-Path $destTimelineDir "ActivitiesCache.db"
                 Invoke-WinFireSafeOperation -Operation {
@@ -1275,7 +1277,7 @@ Function Get-WinFireBrowserForensics {
     $script:ProgressCounter++
     Set-WinFireProgress -Activity "Browser Forensics" -Status "Copying browser data for offline analysis..." -CurrentValue $script:ProgressCounter -MaxValue $script:TotalTasks
     $browserArtifacts = @()
-    $browserProfilesRoot = Join-Path -Path $script:OutputPath -ChildPath "Collected_Artifacts\Browser_Profiles"
+    $browserProfilesRoot = Join-Path -Path $script:ResultsPath -ChildPath "Collected_Artifacts\Browser_Profiles"
     New-Item -ItemType Directory -Path $browserProfilesRoot -ErrorAction SilentlyContinue | Out-Null
 
     Function Copy-LockedBrowserFiles {
@@ -1711,7 +1713,7 @@ Function Get-WinFirePowerShellHistory {
                     }
 
                     # Copy the history file
-                    $destDir = Join-Path $script:OutputPath "Collected_Artifacts\PowerShell_History"
+                    $destDir = Join-Path $script:ResultsPath "Collected_Artifacts\PowerShell_History"
                     New-Item -ItemType Directory -Path $destDir -ErrorAction SilentlyContinue | Out-Null
                     $safeUsername = $username -replace '[\\/:*?"<>|]', '_'
                     $destFile = Join-Path $destDir "${safeUsername}_ConsoleHost_history.txt"
@@ -2109,7 +2111,7 @@ Function Get-WinFireJumpListAnalysis {
                     }
 
                     # Copy jump list files for external analysis
-                    $destDir = Join-Path $script:OutputPath "Collected_Artifacts\JumpLists\$($username -replace '[\\/:*?""<>|]', '_')"
+                    $destDir = Join-Path $script:ResultsPath "Collected_Artifacts\JumpLists\$($username -replace '[\\/:*?""<>|]', '_')"
                     New-Item -ItemType Directory -Path $destDir -ErrorAction SilentlyContinue | Out-Null
                     Copy-Item -Path "$autoDestPath\*" -Destination $destDir -Force -ErrorAction SilentlyContinue
                 }
@@ -2464,7 +2466,17 @@ $script:GlobalHashAlgorithm = $HashAlgorithm
 Show-WinFireBanner
 
 # Check for Administrator privileges (before logging is available)
-Test-WinFireAdminPrivileges
+try {
+    Test-WinFireAdminPrivileges
+} catch {
+    Write-Warning "Could not verify administrator privileges: $_"
+}
+
+# Ensure OutputPath is valid (defense-in-depth against empty/null values)
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    $OutputPath = $PWD.Path
+    Write-Warning "OutputPath was empty, falling back to current directory: $OutputPath"
+}
 
 # Initialize output directory and logging
 New-WinFireOutputDirectory -BasePath $OutputPath -Quiet:$Quiet
@@ -2561,9 +2573,9 @@ try {
     Get-WinFireThreatScore -Quiet:$Quiet
 
     # Final report generation and packaging
-    New-WinFireHashManifest -CollectedFiles $script:CollectedFiles -OutputPath $script:OutputPath
-    New-WinFireHtmlReport -SummaryData $script:SummaryReport -OutputPath $script:OutputPath -ChainOfCustody $script:ChainOfCustody
-    Compress-WinFireEvidence -OutputPath $script:OutputPath -Quiet:$Quiet
+    New-WinFireHashManifest -CollectedFiles $script:CollectedFiles -OutputPath $script:ResultsPath
+    New-WinFireHtmlReport -SummaryData $script:SummaryReport -OutputPath $script:ResultsPath -ChainOfCustody $script:ChainOfCustody
+    Compress-WinFireEvidence -OutputPath $script:ResultsPath -Quiet:$Quiet
 
 }
 catch {
@@ -2575,10 +2587,10 @@ finally {
     $duration = ($script:EndTime - $script:StartTime).ToString("hh\:mm\:ss")
     Log-WinFireMessage -Type INFO -Message "WinFire scan finished at $($script:EndTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Quiet:$Quiet
     Log-WinFireMessage -Type INFO -Message "Total scan duration: $duration" -Quiet:$Quiet
-    Log-WinFireMessage -Type SUCCESS -Message "WinFire scan completed! Check '$($script:OutputPath)' for results." -Quiet:$Quiet
+    Log-WinFireMessage -Type SUCCESS -Message "WinFire scan completed! Check '$($script:ResultsPath)' for results." -Quiet:$Quiet
     Write-Host "`n"
     Write-Host "=====================================================================" -ForegroundColor Green
-    Write-Host " WinFire Scan Completed! Results saved to: $($script:OutputPath)" -ForegroundColor Green
+    Write-Host " WinFire Scan Completed! Results saved to: $($script:ResultsPath)" -ForegroundColor Green
     Write-Host " Total Duration: $duration" -ForegroundColor Green
     Write-Host " Review the 'WinFire_Executive_Summary.html' for an overview." -ForegroundColor Green
     Write-Host "=====================================================================" -ForegroundColor Green

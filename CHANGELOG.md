@@ -7,9 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.2] - 2026-05-05
+
+### 🔧 Patch Release - Critical Variable Scope Bug Fix
+
+This release fixes the **root cause** of all startup errors: a variable naming collision between
+the `$OutputPath` script parameter and the `$script:OutputPath` internal variable.
+
+### Fixed
+
+| Bug | Root Cause | Fix |
+| --- | ---------- | --- |
+| `Join-Path` empty 'Path' errors (Lines 278-279) | `$script:OutputPath = $null` on Line 122 **overwrites** the `$OutputPath` parameter (same scope in `.ps1` files) | Renamed internal variable to `$script:ResultsPath` to eliminate collision |
+| `Test-WinFireAdminPrivileges` not recognized | Cascading failure from the variable scope bug | Wrapped call in `try/catch` for resilience |
+| `New-WinFireOutputDirectory` empty path | `$OutputPath` parameter was `$null` when passed as `$BasePath` | Added `[ValidateNotNullOrEmpty()]` + fallback to `$PWD.Path` |
+| `$oldErrorActionPreference` unset under StrictMode | Variable declared inside `try{}` but referenced in `finally{}` | Moved initialization before the `try` block |
+
+### Changed
+
+| Item | Before | After |
+| ---- | ------ | ----- |
+| Script size | 2587 lines | 2599 lines |
+| Internal results variable | `$script:OutputPath` (collides with param) | `$script:ResultsPath` (no collision) |
+| `$BasePath` parameter | No validation | `[Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()]` |
+| `Test-WinFireAdminPrivileges` call | Bare call, crash on failure | `try/catch` wrapped |
+| `$oldErrorActionPreference` | Set inside `try{}` | Set before `try{}` (StrictMode safe) |
+
+---
+
 ## [2.0.1] - 2026-05-05
 
-### 🔧 Patch Release - Critical Startup Bug Fixes
+### 🔧 Patch Release - Startup Bug Fixes
 
 This release fixes 5 errors that prevented WinFire from executing properly.
 
@@ -196,20 +224,22 @@ First public release of WinFire - Windows Forensic Incident Response Engine.
 
 ## Version Comparison
 
-| Feature               | v1.0 | v2.0 | v2.0.1 |
-| --------------------- | ---- | ---- | ------ |
-| Forensic Functions    | 12   | 21   | 21     |
-| Threat Detection      | ❌   | ✅   | ✅     |
-| LOLBAS Detection      | ❌   | ✅   | ✅     |
-| Credential Indicators | ❌   | ✅   | ✅     |
-| Threat Scoring        | ❌   | ✅   | ✅     |
-| RDP Analysis          | ❌   | ✅   | ✅     |
-| Jump Lists            | ❌   | ✅   | ✅     |
-| LNK Parsing           | ❌   | ✅   | ✅     |
-| Enhanced Banner       | ❌   | ✅   | ✅     |
-| AV Warning Docs       | ❌   | ✅   | ✅     |
-| Reliable Startup      | ✅   | ❌   | ✅     |
-| Privilege Check       | N/A  | ❌   | ✅     |
+| Feature               | v1.0 | v2.0 | v2.0.1 | v2.0.2 |
+| --------------------- | ---- | ---- | ------ | ------ |
+| Forensic Functions    | 12   | 21   | 21     | 21     |
+| Threat Detection      | ❌   | ✅   | ✅     | ✅     |
+| LOLBAS Detection      | ❌   | ✅   | ✅     | ✅     |
+| Credential Indicators | ❌   | ✅   | ✅     | ✅     |
+| Threat Scoring        | ❌   | ✅   | ✅     | ✅     |
+| RDP Analysis          | ❌   | ✅   | ✅     | ✅     |
+| Jump Lists            | ❌   | ✅   | ✅     | ✅     |
+| LNK Parsing           | ❌   | ✅   | ✅     | ✅     |
+| Enhanced Banner       | ❌   | ✅   | ✅     | ✅     |
+| AV Warning Docs       | ❌   | ✅   | ✅     | ✅     |
+| Reliable Startup      | ✅   | ❌   | ❌     | ✅     |
+| Privilege Check       | N/A  | ❌   | ✅     | ✅     |
+| Variable Scope Safety | ✅   | ❌   | ❌     | ✅     |
+| StrictMode Safe       | N/A  | ❌   | ❌     | ✅     |
 
 ---
 
