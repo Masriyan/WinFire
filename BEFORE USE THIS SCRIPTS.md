@@ -123,12 +123,14 @@ Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 ```
 **Why Detected**: This exact pattern is used by malware for AV/EDR evasion before payload deployment.
 
-### **Line 162-180: Privilege Escalation Patterns**
+### **Line 162-180: Privilege Check Patterns**
 ```powershell
-# PRIVILEGE ESCALATION: Advanced permission checks
+# PRIVILEGE CHECK: Administrator and forensic privilege verification
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 $requiredPrivileges = @("SeDebugPrivilege", "SeBackupPrivilege", "SeRestorePrivilege")
+# Uses whoami /priv for reliable cross-version privilege checking
+$whoamiOutput = whoami /priv 2>$null | Out-String
 ```
 **Why Detected**: Checking for debug and backup privileges is a classic malware technique for gaining system-level access.
 

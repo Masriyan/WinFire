@@ -15,9 +15,9 @@ This document outlines security considerations, vulnerability reporting, and imp
 
 | Version | Status     | Support                        |
 | ------- | ---------- | ------------------------------ |
-| 2.0.x   | 🟢 Current | Full support, security updates |
-| 1.0.x   | 🟡 Legacy  | Critical fixes only            |
-| < 1.0   | 🔴 EOL     | No support                     |
+| 2.0.1   | 🟢 Current | Full support, security updates |
+| 2.0.0   | 🟡 Legacy  | Critical fixes only            |
+| 1.0.x   | 🔴 EOL     | No support                     |
 
 ## 🛡️ Antivirus Detection
 

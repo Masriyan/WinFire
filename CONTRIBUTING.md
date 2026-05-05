@@ -105,9 +105,11 @@ Get-WinFireSummaryEntry -Category "Category" -Description "What was done" -Statu
 - ✅ Handle null/empty data gracefully
 - ✅ Use `-ErrorAction SilentlyContinue` where appropriate
 - ✅ Document function purpose with `<# .SYNOPSIS #>`
+- ✅ Add `[CmdletBinding()]` to all functions (required for StrictMode compatibility)
 - ✅ Keep lines under 120 characters
 - ❌ No hardcoded paths (use environment variables)
 - ❌ No Write-Host without -Quiet handling
+- ❌ No direct `.Privileges` or other non-existent .NET properties (verify API exists)
 
 ## 📝 Function Template
 
@@ -123,6 +125,7 @@ Function Get-WinFireNewFeature {
     .PARAMETER Quiet
         Suppress console output when true.
     #>
+    [CmdletBinding()]
     param([switch]$Quiet)
 
     # Progress tracking

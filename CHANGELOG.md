@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.1] - 2026-05-05
+
+### 🔧 Patch Release - Critical Startup Bug Fixes
+
+This release fixes 5 errors that prevented WinFire from executing properly.
+
+### Fixed
+
+| Bug | Root Cause | Fix |
+| --- | ---------- | --- |
+| `Author:` not recognized as cmdlet | Pipe `\|` in banner string parsed as PowerShell pipeline operator | Removed pipe character, split into separate `Write-Host` calls |
+| `Cannot bind argument to 'Path'` (null) | `Log-WinFireMessage` called before `New-WinFireOutputDirectory` initialized `$script:LogPath` | Added null/existence guard clause before file writes |
+| `Privileges` property not found | `WindowsIdentity.Privileges` does not exist in .NET Framework | Replaced with `whoami /priv` output parsing |
+| `Test-WinFireAdminPrivileges` not recognized | Function lacked `[CmdletBinding()]` but was called with `-ErrorAction Stop` under strict mode | Added `[CmdletBinding()]` attribute; removed `-ErrorAction Stop` from call site |
+| Multiple log write warnings during startup | Admin privilege check ran before output directory existed | Added graceful pre-init fallback for early log writes |
+
+### Changed
+
+| Item | Before | After |
+| ---- | ------ | ----- |
+| Script size | 2576 lines | 2587 lines |
+| Banner format | `Version: 2.0 \| Author: sudo3rs` | `Version: 2.0  Author: sudo3rs` |
+| Privilege check | `.Privileges` property (broken) | `whoami /priv` parsing (reliable) |
+| Execution order | Banner → Admin check → Directory init | Banner → Admin check (console-only) → Directory init → Log confirmation |
+
+---
+
 ## [2.0.0] - 2026-01-29
 
 ### 🚀 Major Release - Threat Detection & Enhanced Analysis
@@ -169,24 +196,26 @@ First public release of WinFire - Windows Forensic Incident Response Engine.
 
 ## Version Comparison
 
-| Feature               | v1.0 | v2.0 |
-| --------------------- | ---- | ---- |
-| Forensic Functions    | 12   | 21   |
-| Threat Detection      | ❌   | ✅   |
-| LOLBAS Detection      | ❌   | ✅   |
-| Credential Indicators | ❌   | ✅   |
-| Threat Scoring        | ❌   | ✅   |
-| RDP Analysis          | ❌   | ✅   |
-| Jump Lists            | ❌   | ✅   |
-| LNK Parsing           | ❌   | ✅   |
-| Enhanced Banner       | ❌   | ✅   |
-| AV Warning Docs       | ❌   | ✅   |
+| Feature               | v1.0 | v2.0 | v2.0.1 |
+| --------------------- | ---- | ---- | ------ |
+| Forensic Functions    | 12   | 21   | 21     |
+| Threat Detection      | ❌   | ✅   | ✅     |
+| LOLBAS Detection      | ❌   | ✅   | ✅     |
+| Credential Indicators | ❌   | ✅   | ✅     |
+| Threat Scoring        | ❌   | ✅   | ✅     |
+| RDP Analysis          | ❌   | ✅   | ✅     |
+| Jump Lists            | ❌   | ✅   | ✅     |
+| LNK Parsing           | ❌   | ✅   | ✅     |
+| Enhanced Banner       | ❌   | ✅   | ✅     |
+| AV Warning Docs       | ❌   | ✅   | ✅     |
+| Reliable Startup      | ✅   | ❌   | ✅     |
+| Privilege Check       | N/A  | ❌   | ✅     |
 
 ---
 
 ## Roadmap
 
-### Planned for v2.1
+### Planned for v2.2
 
 - [ ] Memory dump collection for critical processes
 - [ ] USN Journal parsing

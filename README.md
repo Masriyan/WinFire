@@ -1,11 +1,11 @@
 # WinFire 🔥
 
-**Windows Forensic Incident Response Engine v2.0**
+**Windows Forensic Incident Response Engine v2.0.1**
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%2FServer%202016%2B-green.svg)](https://www.microsoft.com/windows)
-[![Version](https://img.shields.io/badge/Version-2.0-brightgreen.svg)](https://github.com/Masriyan/WinFire)
+[![Version](https://img.shields.io/badge/Version-2.0.1-brightgreen.svg)](https://github.com/Masriyan/WinFire)
 
 > A comprehensive PowerShell tool for Windows digital forensics and incident response, designed to rapidly collect critical forensic artifacts for security investigations.
 
@@ -22,7 +22,7 @@
   ╚███╔███╔╝██║██║ ╚████║██║     ██║██║  ██║███████╗
    ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝
 
-  Windows Forensic Incident Response Engine v2.0
+  Windows Forensic Incident Response Engine v2.0.1
 ```
 
 ## 📋 Table of Contents
@@ -81,7 +81,7 @@ Set-MpPreference -DisableRealtimeMonitoring $false
 > [!IMPORTANT]
 > **Document any AV exclusions or modifications** in your chain of custody notes for forensic integrity.
 
-## � How WinFire Works
+## 🔬 How WinFire Works
 
 ### Execution Flowchart
 
@@ -96,6 +96,11 @@ Set-MpPreference -DisableRealtimeMonitoring $false
     └──────┬───────┘
            │
            ▼
+    ┌──────────────────┐
+    │ Show Banner      │
+    └──────┬───────────┘
+           │
+           ▼
     ┌──────────────────┐     ┌──────────────────┐
     │ Check Admin      │────▶│ Display Warning  │
     │ Privileges       │ No  │ & Exit           │
@@ -103,7 +108,6 @@ Set-MpPreference -DisableRealtimeMonitoring $false
            │ Yes
            ▼
     ┌──────────────────┐
-    │ Show Banner      │
     │ Initialize Logs  │
     │ Create Folders   │
     └──────┬───────────┘
@@ -232,7 +236,7 @@ Below is an example of what the **Threat Score** output looks like:
 | 31-60  | 🟠 **High**     | Significant threats, prioritize analysis     |
 | 61-100 | 🔴 **Critical** | Active compromise likely, immediate response |
 
-## �🚀 What's New in v2.0
+## 🚀 What's New in v2.0.1
 
 ### Major New Features
 
@@ -248,7 +252,15 @@ Below is an example of what the **Threat Score** output looks like:
 | 📁 **Jump List Analysis**        | Collect and analyze user activity from Jump Lists                                 |
 | 🔗 **LNK File Analysis**         | Parse shortcuts for suspicious targets and arguments                              |
 
-### Bug Fixes
+### Bug Fixes (v2.0.1)
+
+- **Fixed banner parsing error**: Removed pipe `|` character that was misinterpreted as a PowerShell pipeline operator, causing `Author:` to be treated as a command
+- **Fixed null LogPath crash**: Added guard clause so `Log-WinFireMessage` handles early-startup calls before the output directory is created
+- **Fixed `.Privileges` property error**: Replaced non-existent `WindowsIdentity.Privileges` with reliable `whoami /priv` parsing for privilege checks
+- **Fixed `Test-WinFireAdminPrivileges` not recognized**: Added `[CmdletBinding()]` attribute so the function properly accepts common parameters under `Set-StrictMode -Version Latest`
+- **Fixed execution order**: Admin privilege check now runs before directory init, with graceful fallback for pre-init log writes
+
+### Bug Fixes (v2.0.0)
 
 - Fixed `Get-CService` typo (was causing service collection failures)
 - Fixed extension matching for suspicious file detection
@@ -259,7 +271,7 @@ Below is an example of what the **Threat Score** output looks like:
 
 - Enhanced ASCII art banner with animated flame effects
 - Added GitHub repository URL display
-- Improved version display and formatting
+- Improved version display and formatting (removed problematic pipe separator)
 
 ## 🎯 Overview
 
@@ -592,8 +604,9 @@ We welcome contributions to improve WinFire! Here's how you can help:
 
 ### Version History
 
-- **v2.0** - Major update with 10 new threat detection features, bug fixes, and UI improvements
-- **v1.0** - Initial release with core forensic collection capabilities
+- **v2.0.1** - Critical startup bug fixes (banner parsing, privilege checks, logging init order)
+- **v2.0.0** - Major update with 10 new threat detection features, bug fixes, and UI improvements
+- **v1.0.0** - Initial release with core forensic collection capabilities
 
 ## 📞 Support
 
@@ -670,4 +683,4 @@ For detailed version history and changes, please see [CHANGELOG.md](CHANGELOG.md
 
 **🔥 Happy Hunting! 🔥**
 
-_WinFire v2.0 - Illuminating the path to digital truth_
+_WinFire v2.0.1 - Illuminating the path to digital truth_
