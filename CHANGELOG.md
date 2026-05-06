@@ -2,8 +2,72 @@
 
 All notable changes to WinFire are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project uses semantic versioning.
+
+---
+
+## [2.1.0] - 2026-05-06
+
+### Comprehensive Forensic Expansion and Runtime Hardening
+
+This release adds new collection modules, fixes service/network/admin bugs, improves threat scoring and HTML reporting, and validates the script against a real elevated quick scan.
+
+### Added
+
+| Feature | Output |
+| --- | --- |
+| Named pipes enumeration with risk classification | `Raw_Data\Named_Pipes.csv/.json` |
+| Volume Shadow Copy enumeration | `Raw_Data\Shadow_Copies.csv/.json` |
+| Alternate Data Streams scan | `Raw_Data\Alternate_Data_Streams.csv/.json` |
+| Proxy, WinHTTP, and WPAD collection | `Raw_Data\Proxy_Settings.csv/.json` |
+| Sysmon service/config and event collection | `Raw_Data\Sysmon_Artifacts.csv/.json`, `Sysmon_Events.json` |
+| Kernel driver enumeration and signature status | `Raw_Data\Kernel_Drivers.csv/.json` |
+| ETW/WMI consumer enumeration | `Raw_Data\ETW_Consumers.csv/.json` |
+| AppLocker, WDAC, AMSI, and PowerShell v2 policy state | `Raw_Data\Policy_State.csv/.json` |
+| Credential Guard, VBS, BitLocker, TPM, and LSA protection state | `Raw_Data\Security_Posture.csv/.json` |
+| Dynamic progress task planning | `Get-WinFirePlannedTaskCount` |
+| Enhanced HTML report sections | Executive report module summaries |
+| Additional threat scoring indicators | High-risk pipes, VSS, ADS, drivers, LSA, PSv2, Sysmon, WDAC/AppLocker |
+
+### Changed
+
+| Area | Change |
+| --- | --- |
+| Version metadata | Updated `$script:Version` to `2.1.0` and `$script:BuildDate` to `2026-05-06`. |
+| Services output | Replaced legacy `Services.csv/.json` with `Services_Status.csv/.json` and `Services_Detail.csv/.json`. |
+| Summary function | Renamed `Get-WinFireSummaryEntry` to `Add-WinFireSummaryEntry`. |
+| WMI usage | Replaced remaining `Get-WmiObject` with `Get-CimInstance`. |
+| Admin check | `Test-WinFireAdminPrivileges` now returns `$false`; main block handles exit code `3`. |
+| Promiscuous mode detection | Removed invalid registry placeholder and uses adapter advanced properties. |
+| Threat scoring | Uses raw data for high-signal modules to reduce double counting and false positives. |
+| ADS handling | Keeps benign stream names visible while scoring only suspicious ADS entries. |
+| Named pipe handling | Keeps low-confidence Chromium and Windows patterns visible while scoring high-risk matches only. |
+
+### Fixed
+
+| Bug | Fix |
+| --- | --- |
+| Service collection overwrite | Split `Get-Service` and `Get-CimInstance Win32_Service` into separate variables and files. |
+| Proxy registry StrictMode failure | Reads optional IE proxy values through safe property lookup. |
+| Locked `Amcache.hve` failed operation | Records copy failure as data row instead of failing the safe operation. |
+| PowerShell history JSON bloat | Normalizes string values before CSV/JSON serialization. |
+| Non-admin abort noise | Admin check no longer emits extra error records before main exit handling. |
+| False-positive threat score inflation | Added pipe risk levels and benign ADS stream filtering. |
+
+### Validation
+
+Validated locally with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\WinFire.ps1 -Help
+powershell -NoProfile -ExecutionPolicy Bypass -File .\WinFire.ps1 -Quick -OutputPath .\WinFire_TestRuns -Quiet
+```
+
+Latest elevated quick scan:
+
+- Status: `COMPLETED`
+- Operations: `1512 total, 1512 succeeded, 0 failed`
+- Output: `WinFire_TestRuns\WinFire_Results_20260506_095301`
 
 ---
 
@@ -11,114 +75,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Enterprise-Grade Hardening Release
 
-This release transforms WinFire into an enterprise-grade forensic tool with centralized
-configuration, phased execution, operation metrics, and comprehensive audit trails.
+This release transformed WinFire into a more reliable forensic tool with centralized configuration, phased execution, operation metrics, and comprehensive audit trails.
 
 ### Added
 
-| Feature                      | Description                                                             |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| **Centralized Version**      | `$script:Version` constant replaces all hardcoded version strings       |
-| **Prerequisites Validation** | `Test-WinFirePrerequisites` checks PS >= 5.1 and Windows OS at startup  |
-| **Professional Banner**      | Shows hostname, user, privilege level, PS version, OS, start time       |
-| **Phased Execution**         | 6 named phases with clear log markers                                   |
-| **Operation Metrics**        | Per-operation `Stopwatch` timing, exported to `Operation_Metrics.csv`   |
-| **Transcript Logging**       | Full PowerShell transcript to `WinFire_Transcript.txt`                  |
-| **Graceful Shutdown**        | `$script:CancelRequested` flag checked before each operation            |
-| **Exit Codes**               | `0` success, `1` error, `2` prerequisites failed                       |
-| **Execution Summary**        | Professional summary with status, duration, operation counts            |
+| Feature | Description |
+| --- | --- |
+| Centralized version | `$script:Version` constant replaced hardcoded version strings. |
+| Prerequisites validation | `Test-WinFirePrerequisites` checks PowerShell 5.1+ and Windows OS. |
+| Professional banner | Shows hostname, user, privilege level, PowerShell version, OS, and start time. |
+| Phased execution | Six named phases with clear log markers. |
+| Operation metrics | Per-operation timing exported to `Operation_Metrics.csv`. |
+| Transcript logging | Full PowerShell transcript to `WinFire_Transcript.txt`. |
+| Graceful shutdown | Cancellation flag checked before each safe operation. |
+| Execution summary | Final status, duration, operation counts, output path, and report path. |
 
 ### Fixed
 
-| Bug | Root Cause | Fix |
-| --- | ---------- | --- |
-| `Join-Path` empty 'Path' errors | `$script:OutputPath = $null` overwrites `$OutputPath` parameter | Renamed to `$script:ResultsPath` |
-| `Test-WinFireAdminPrivileges` crash | Unhandled exception cascades | Wrapped in `try/catch` |
-| `New-WinFireOutputDirectory` empty path | No parameter validation | Added `[ValidateNotNullOrEmpty()]` |
-| `$oldErrorActionPreference` unset | Declared inside `try{}`, used in `finally{}` | Moved before `try` block |
-| `Log-WinFireMessage` unapproved verb | PSScriptAnalyzer warning | Renamed to `Write-WinFireLog` |
-| `$profile` automatic variable conflict | Shadows PowerShell's `$PROFILE` | Renamed to `$userProfile` |
-| `$event` automatic variable conflict | Shadows PowerShell's `$Event` | Renamed to `$logEvent` |
-| `$null` on wrong side of comparison | PSScriptAnalyzer warning | Flipped to `$null -eq $var` |
-| `$dnsEntries` assigned but unused | Dead code | Removed |
-| `$persistenceKeys` assigned but unused | Dead code | Removed |
-| `$hash` assigned but unused | Unused Get-FileHashSafe call | Removed |
-| Unicode parse errors on PS 5.1 | Box-drawing characters in string literals | Replaced with ASCII |
-
-### Changed
-
-| Item | Before | After |
-| ---- | ------ | ----- |
-| Script lines | 2599 | 2686 |
-| Function count | 33 | 34 (+Test-WinFirePrerequisites) |
-| Internal results variable | `$script:OutputPath` | `$script:ResultsPath` |
-| Log function name | `Log-WinFireMessage` | `Write-WinFireLog` |
-| Banner | ASCII art + Unicode box | Clean text with system context |
-| Execution flow | Flat function list | 6 phased scan pipeline |
-| Error output | Generic completion message | Structured execution summary |
-| File encoding | Mixed | UTF-8 with BOM (ASCII-only content) |
-
-### New Output Files
-
-```
-Reports/
-+-- Operation_Metrics.csv       # Per-operation timing and status
-
-WinFire_Transcript.txt          # Full PowerShell transcript
-```
+| Bug | Fix |
+| --- | --- |
+| `$script:OutputPath` overwrote the `-OutputPath` parameter | Renamed runtime output root to `$script:ResultsPath`. |
+| Admin check crash path | Wrapped verification and improved initialization order. |
+| Missing output path validation | Added `[ValidateNotNullOrEmpty()]`. |
+| Unset `$oldErrorActionPreference` | Moved initialization before the safe-operation `try` block. |
+| Unapproved logging verb | Renamed `Log-WinFireMessage` to `Write-WinFireLog`. |
+| PowerShell automatic variable conflicts | Renamed local variables such as `$profile` and `$event`. |
+| Unicode console artifacts | Replaced banner and output decorations with ASCII-safe text. |
 
 ---
 
 ## [2.0.1] - 2026-05-05
 
-### Patch Release - Startup Bug Fixes
+### Startup Bug Fixes
 
-This release fixes 5 errors that prevented WinFire from executing properly.
-
-### Fixed
-
-| Bug | Root Cause | Fix |
-| --- | ---------- | --- |
-| `Author:` not recognized as cmdlet | Pipe `\|` in banner string parsed as pipeline operator | Removed pipe character |
-| `Cannot bind argument to 'Path'` (null) | `Log-WinFireMessage` called before `$script:LogPath` initialized | Added null guard clause |
-| `Privileges` property not found | `WindowsIdentity.Privileges` does not exist in .NET | Replaced with `whoami /priv` parsing |
-| `Test-WinFireAdminPrivileges` not recognized | Function lacked `[CmdletBinding()]` | Added attribute |
-| Multiple log write warnings | Admin check ran before output directory existed | Reordered execution |
+- Fixed banner parsing issues.
+- Guarded logging before log path initialization.
+- Replaced invalid `WindowsIdentity.Privileges` usage with `whoami /priv` parsing.
+- Added `[CmdletBinding()]` to the admin privilege function.
+- Reordered startup so output/logging are initialized predictably.
 
 ---
 
 ## [2.0.0] - 2026-01-29
 
-### Major Release - Threat Detection & Enhanced Analysis
+### Threat Detection and Enhanced Analysis
 
 ### Added
 
-#### Threat Detection Features
-
-| Feature                       | Description                                                                        |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| **LOLBAS Detection**          | Detect abuse of certutil, mshta, regsvr32, wmic, bitsadmin, and 10+ other binaries |
-| **Credential Indicators**     | Detect LSASS access events, credential dumping tools, SAM/SECURITY hive copies     |
-| **Advanced Process Analysis** | Identify suspicious parent-child relationships (e.g., Word -> PowerShell)          |
-| **Threat Scoring**            | Automated 0-100 threat score with Low/Medium/High/Critical risk levels             |
-
-#### New Artifact Collection
-
-| Feature                 | Description                                                      |
-| ----------------------- | ---------------------------------------------------------------- |
-| **Defender Exclusions** | Collect and flag suspicious Windows Defender exclusions          |
-| **PowerShell History**  | Collect PSReadLine command history with threat pattern detection |
-| **RDP Analysis**        | Analyze RDP sessions and connection history for lateral movement |
-| **Jump List Analysis**  | Collect user activity from Jump Lists                            |
-| **LNK File Analysis**   | Parse shortcuts for malicious targets and arguments              |
+- LOLBAS detection.
+- Credential dumping indicators.
+- Advanced process parent-child analysis.
+- Automated threat scoring.
+- Defender exclusions collection.
+- PowerShell history collection.
+- RDP analysis.
+- Jump List analysis.
+- LNK file analysis.
 
 ### Fixed
 
-| Bug                  | Fix                                                               |
-| -------------------- | ----------------------------------------------------------------- |
-| `Get-CService` typo  | Changed to `Get-Service` with additional Win32_Service collection |
-| Extension matching   | Fixed `-in` operator to use `-contains` with proper dot stripping |
-| Environment variable | Fixed `$env:ProgramFilesx86` syntax                               |
+- Fixed `Get-CService` typo.
+- Fixed suspicious extension matching.
+- Fixed `ProgramFiles(x86)` environment variable usage.
 
 ---
 
@@ -126,37 +144,35 @@ This release fixes 5 errors that prevented WinFire from executing properly.
 
 ### Initial Release
 
-First public release of WinFire - Windows Forensic Incident Response Engine.
-
-- Core forensic collection: System, Users, Processes, Services, Scheduled Tasks, WMI
-- Network forensics: TCP/UDP, Firewall, SMB, Shares
-- File system artifacts: Amcache, Prefetch, SRUM, Timeline, BITS
-- Registry analysis: Autoruns, USB, MRU, COM Hijacking
-- Event log collection: Security, System, Application, PowerShell, Defender
-- Browser forensics: Chrome, Edge, Firefox with RoboCopy
-- Security tool detection: Defender, AV, EDR
-- Memory indicators: DLLs, hollowing, injection
-- Reporting: HTML, Hash Manifest, Chain of Custody, ZIP
+- Core forensic collection for system, users, processes, services, scheduled tasks, and WMI.
+- Network forensics for TCP/UDP, firewall, SMB, and shares.
+- File system artifacts including Amcache, Prefetch, SRUM, Timeline, and BITS.
+- Registry analysis for autoruns, USB, MRU, and COM hijacking.
+- Event log collection.
+- Browser forensics.
+- Security tool detection.
+- Memory indicators.
+- HTML report, hash manifest, chain of custody, and ZIP packaging.
 
 ---
 
 ## Version Comparison
 
-| Feature               | v1.0 | v2.0 | v2.0.1 | v2.0.2 |
-| --------------------- | ---- | ---- | ------ | ------ |
-| Forensic Functions    | 12   | 21   | 21     | 21     |
-| Threat Detection      | -    | Yes  | Yes    | Yes    |
-| LOLBAS Detection      | -    | Yes  | Yes    | Yes    |
-| Credential Indicators | -    | Yes  | Yes    | Yes    |
-| Threat Scoring        | -    | Yes  | Yes    | Yes    |
-| Reliable Startup      | Yes  | No   | No     | Yes    |
-| StrictMode Safe       | N/A  | No   | No     | Yes    |
-| Prerequisites Check   | -    | -    | -      | Yes    |
-| Operation Metrics     | -    | -    | -      | Yes    |
-| Transcript Logging    | -    | -    | -      | Yes    |
-| Phased Execution      | -    | -    | -      | Yes    |
-| Exit Codes            | -    | -    | -      | Yes    |
-| Graceful Shutdown     | -    | -    | -      | Yes    |
+| Feature | v1.0 | v2.0 | v2.0.2 | v2.1.0 |
+| --- | --- | --- | --- | --- |
+| Core forensic collection | Yes | Yes | Yes | Yes |
+| Threat detection | No | Yes | Yes | Yes |
+| Operation metrics | No | No | Yes | Yes |
+| Transcript logging | No | No | Yes | Yes |
+| Dynamic progress planning | No | No | No | Yes |
+| Named pipes | No | No | No | Yes |
+| Shadow copies | No | No | No | Yes |
+| ADS scan | No | No | No | Yes |
+| Sysmon artifacts | No | No | No | Yes |
+| Policy/security posture | No | No | No | Yes |
+| Kernel driver signatures | No | No | No | Yes |
+| ETW/WMI consumers | No | No | No | Yes |
+| Enhanced HTML module sections | No | No | No | Yes |
 
 ---
 
@@ -164,18 +180,18 @@ First public release of WinFire - Windows Forensic Incident Response Engine.
 
 ### Planned for v2.2
 
-- [ ] Memory dump collection for critical processes
-- [ ] USN Journal parsing
-- [ ] ETW log collection
-- [ ] Improved HTML report with charts
+- USN Journal parsing.
+- Optional critical-process memory dump support.
+- More timeline correlation.
+- HTML charts and filtering.
 
 ### Planned for v3.0
 
-- [ ] Cloud artifact collection (OneDrive, Office 365)
-- [ ] API integration with threat intelligence
-- [ ] PowerShell 7 Core compatibility
-- [ ] Remote collection capabilities
+- Cloud artifact collection.
+- Threat intelligence enrichment.
+- Remote collection workflows.
+- Broader PowerShell 7 validation.
 
 ---
 
-**Repository**: [https://github.com/Masriyan/WinFire](https://github.com/Masriyan/WinFire)
+Repository: [https://github.com/Masriyan/WinFire](https://github.com/Masriyan/WinFire)

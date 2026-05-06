@@ -1,283 +1,259 @@
-# Contributing to WinFire 🔥
+# Contributing to WinFire
 
-Thank you for your interest in contributing to WinFire! This guide will help you get started.
+Thank you for helping improve WinFire. This project is a Windows DFIR tool, so reliability, forensic correctness, and clear documentation matter more than broad refactors.
 
-[![GitHub Issues](https://img.shields.io/github/issues/Masriyan/WinFire)](https://github.com/Masriyan/WinFire/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/Masriyan/WinFire)](https://github.com/Masriyan/WinFire/pulls)
+## Ways to Contribute
 
-## 📋 Table of Contents
+### Bug Reports
 
-- [Ways to Contribute](#-ways-to-contribute)
-- [Development Setup](#-development-setup)
-- [Code Guidelines](#-code-guidelines)
-- [Function Template](#-function-template)
-- [Testing](#-testing)
-- [Pull Request Process](#-pull-request-process)
-- [Code of Conduct](#-code-of-conduct)
+Open an issue with:
 
-## 🤝 Ways to Contribute
+- WinFire version.
+- Windows version.
+- PowerShell version.
+- Command line used.
+- Expected behavior.
+- Actual behavior.
+- Relevant lines from `WinFire_ExecutionLog.txt`.
+- Whether the session was elevated.
 
-### 🐛 Reporting Bugs
+Do not paste sensitive forensic data into public issues.
 
-1. Search [existing issues](https://github.com/Masriyan/WinFire/issues) first
-2. Create a new issue with:
-   - **Title**: Clear, descriptive summary
-   - **Environment**: Windows version, PowerShell version, WinFire version
-   - **Steps to Reproduce**: Detailed reproduction steps
-   - **Expected vs Actual**: What you expected vs what happened
-   - **Error Messages**: Full error text or screenshots
+### Feature Requests
 
-### 💡 Feature Requests
+Include:
 
-1. Open an [issue](https://github.com/Masriyan/WinFire/issues/new) with `enhancement` label
-2. Describe:
-   - **Forensic Value**: Why is this artifact important?
-   - **Use Case**: When would investigators need this?
-   - **Data Source**: Where does the data come from?
-   - **Example Output**: What would the collected data look like?
+- Forensic value.
+- Windows data source.
+- Required privileges.
+- Expected CSV/JSON schema.
+- Whether the module should run in `-Quick`, `-Full`, or both.
+- Expected HTML report and threat scoring impact.
 
-### 📖 Documentation Improvements
+### Documentation
 
-- Fix typos or clarify existing documentation
-- Add usage examples or forensic context
-- Translate documentation to other languages
+Documentation updates should stay current with:
 
-## 🛠️ Development Setup
+- Script version and build date.
+- Parameters.
+- Raw output file names.
+- Known warnings and live-system limitations.
+- Testing instructions.
 
-### Prerequisites
+## Development Setup
 
-- Windows 10/11 or Windows Server 2016+
-- PowerShell 5.1+ (Windows PowerShell)
-- Git for version control
-- Administrator privileges for testing
+Requirements:
 
-### Setup Steps
+- Windows 10/11 or Windows Server 2016+.
+- Windows PowerShell 5.1+.
+- Administrator privileges for real scan testing.
+- Git if available.
+
+Example setup:
 
 ```powershell
-# 1. Fork the repository on GitHub
-
-# 2. Clone your fork
-git clone https://github.com/YOUR-USERNAME/WinFire.git
+git clone https://github.com/Masriyan/WinFire.git
 cd WinFire
-
-# 3. Add upstream remote
-git remote add upstream https://github.com/Masriyan/WinFire.git
-
-# 4. Create a feature branch
-git checkout -b feature/your-feature-name
-
-# 5. Keep your fork updated
-git fetch upstream
-git merge upstream/main
 ```
 
-## 📐 Code Guidelines
+If `git` is not available, work directly from the source directory and keep manual notes of changed files.
 
-### Naming Conventions
+## Coding Standards
 
-| Element          | Convention           | Example                      |
-| ---------------- | -------------------- | ---------------------------- |
-| Functions        | `Get-WinFire*`       | `Get-WinFireNetworkAnalysis` |
-| Variables        | `$camelCase`         | `$processData`               |
-| Script Variables | `$script:PascalCase` | `$script:ResultsPath`        |
-| Parameters       | `PascalCase`         | `[string]$OutputPath`        |
+### PowerShell Compatibility
+
+- Maintain Windows PowerShell 5.1 compatibility.
+- Do not require PowerShell 7-only features.
+- Use `Get-CimInstance`, not `Get-WmiObject`.
+- Use ASCII string literals unless there is a specific forensic reason.
+- Keep output stable for CSV/JSON consumers.
+
+### Naming
+
+| Element | Convention | Example |
+| --- | --- | --- |
+| Collection functions | `Get-WinFire*` | `Get-WinFireNetworkAnalysis` |
+| Summary function | `Add-WinFireSummaryEntry` | `Add-WinFireSummaryEntry -Category "Network"` |
+| Logging function | `Write-WinFireLog` | `Write-WinFireLog -Type INFO` |
+| Script state | `$script:PascalCase` | `$script:ResultsPath` |
+| Local variables | `$camelCase` | `$processList` |
 
 ### Required Patterns
 
+All forensic operations should use `Invoke-WinFireSafeOperation`:
+
 ```powershell
-# ✅ Use safe operations wrapper
 $data = Invoke-WinFireSafeOperation -Operation {
-    # Your code here
-} -OperationName "Operation Name" -Quiet:$Quiet
-
-# Use standard logging
-Write-WinFireLog -Type INFO -Message "Message" -Quiet:$Quiet
-
-# Use standard data export
-Save-WinFireData -Data $data -FileName "Output_Name" -Quiet:$Quiet
-
-# Add summary entry
-Get-WinFireSummaryEntry -Category "Category" -Description "What was done" -Status "Success" -Details "Extra info"
+    Get-CimInstance Win32_Service |
+        Select-Object Name, State, StartMode, PathName
+} -OperationName "Collect Service Details" -Quiet:$Quiet
 ```
 
-### Code Quality
-
-- Handle null/empty data gracefully
-- Use `-ErrorAction SilentlyContinue` where appropriate
-- Document function purpose with `<# .SYNOPSIS #>`
-- Add `[CmdletBinding()]` to all functions (required for StrictMode compatibility)
-- Keep lines under 120 characters
-- Use `$script:Version` constant instead of hardcoding version strings
-- Use ASCII-only characters in string literals (no Unicode box-drawing)
-- Place `$null` on the left side of equality comparisons
-- Avoid using PowerShell automatic variable names (`$profile`, `$event`, etc.)
-- No hardcoded paths (use environment variables)
-- No `Write-Host` without `-Quiet` handling
-- No direct `.Privileges` or other non-existent .NET properties (verify API exists)
-
-## 📝 Function Template
-
-Use this template when adding new forensic collection functions:
+Save structured output through `Save-WinFireData`:
 
 ```powershell
-Function Get-WinFireNewFeature {
+Save-WinFireData -Data $data -FileName "Services_Detail" -Quiet:$Quiet
+```
+
+Add report summary entries with the approved verb:
+
+```powershell
+Add-WinFireSummaryEntry `
+    -Category "Services" `
+    -Description "Collected detailed service configuration." `
+    -Status "Success" `
+    -Details "Collected $(@($data).Count) services."
+```
+
+### Function Template
+
+```powershell
+Function Get-WinFireNewArtifact {
     <#
     .SYNOPSIS
-        Brief description of what this function collects.
-    .DESCRIPTION
-        Detailed forensic value and context.
-    .PARAMETER Quiet
-        Suppress console output when true.
+        Collects a concise description of the artifact.
     #>
     [CmdletBinding()]
-    param([switch]$Quiet)
+    param(
+        [switch]$Quick,
+        [switch]$Quiet
+    )
 
-    # Progress tracking
     $script:ProgressCounter++
-    Set-WinFireProgress -Activity "Feature Name" `
-        -Status "Collecting feature data..." `
+    Set-WinFireProgress `
+        -Activity "New Artifact" `
+        -Status "Collecting new artifact..." `
         -CurrentValue $script:ProgressCounter `
         -MaxValue $script:TotalTasks
 
-    # Initialize results
-    $results = @()
+    $results = Invoke-WinFireSafeOperation -Operation {
+        # Collection logic here.
+        @()
+    } -OperationName "Collect New Artifact" -Quiet:$Quiet
 
-    # Safe data collection
-    $collectedData = Invoke-WinFireSafeOperation -Operation {
-        # Your collection logic here
-        Get-CimInstance Win32_SomeClass | Select-Object Property1, Property2
-    } -OperationName "Collect Feature Data" -Quiet:$Quiet
+    Save-WinFireData -Data $results -FileName "New_Artifact" -Quiet:$Quiet
 
-    # Process and format data
-    if ($collectedData) {
-        foreach ($item in $collectedData) {
-            $results += [PSCustomObject]@{
-                Property1 = $item.Property1
-                Property2 = $item.Property2
-                CollectedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-            }
-        }
-    }
-
-    # Export data
-    Save-WinFireData -Data $results -FileName "Feature_Name" -Quiet:$Quiet
-
-    # Add to summary report
-    Get-WinFireSummaryEntry `
-        -Category "Feature Category" `
-        -Description "Collected feature data for analysis." `
+    Add-WinFireSummaryEntry `
+        -Category "New Artifact" `
+        -Description "Collected new artifact data." `
         -Status "Success" `
-        -Details "Found $($results.Count) items."
+        -Details "Collected $(@($results).Count) rows."
 }
 ```
 
-## 🧪 Testing
+### Error Handling
 
-### Manual Testing Checklist
+- Prefer typed catches for expected failures:
+  - `[System.UnauthorizedAccessException]`
+  - `[System.IO.IOException]`
+- For locked live-system artifacts, record a row with status/error when possible instead of failing the whole scan.
+- Avoid direct `exit` inside helper functions. Return status and let the main block decide the exit code.
+- Avoid destructive operations.
 
-Before submitting a PR, test on:
+### Progress and Task Counts
 
-- [ ] Windows 10 (latest)
-- [ ] Windows 11 (latest)
-- [ ] Windows Server 2019/2022 (if possible)
+If you add or remove a top-level progress unit:
 
-### Test Scenarios
+1. Increment/decrement `Get-WinFirePlannedTaskCount`.
+2. Ensure the new function increments `$script:ProgressCounter`.
+3. Ensure skipped sections still advance progress or are reflected in the planned count.
+
+### Report and Threat Score
+
+If a new module is user-visible:
+
+- Add raw output documentation to `README.md`.
+- Add an HTML report section when the result changes investigation decisions.
+- Add threat scoring only for high-signal indicators.
+- Avoid double counting a summary warning and raw-data indicator for the same finding.
+- Classify noisy artifacts before scoring them.
+
+## Testing
+
+### Static Validation
+
+Run:
 
 ```powershell
-# 1. Quick scan mode
-.\WinFire.ps1 -Quick -OutputPath "C:\Test\Quick"
-
-# 2. Full scan mode
-.\WinFire.ps1 -Full -OutputPath "C:\Test\Full"
-
-# 3. With exclusions
-.\WinFire.ps1 -Quick -ExcludeNetwork -ExcludeBrowser -OutputPath "C:\Test\Exclude"
-
-# 4. Quiet mode
-.\WinFire.ps1 -Quick -Quiet -OutputPath "C:\Test\Quiet"
-
-# 5. Verify outputs
-Get-ChildItem "C:\Test\Quick\Raw_Data" | Measure-Object
-Get-Content "C:\Test\Quick\WinFire_ExecutionLog.txt" -Tail 50
+$tokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path .\WinFire.ps1),
+    [ref]$tokens,
+    [ref]$parseErrors
+) | Out-Null
+$parseErrors
 ```
 
-### Verify Your Changes
+Expected result: no parse errors.
 
-1. ✅ New CSV/JSON files are created
-2. ✅ No errors in execution log
-3. ✅ HTML report includes new category
-4. ✅ Script completes without exceptions
+Check for deprecated patterns:
 
-## 📤 Pull Request Process
-
-### Before Submitting
-
-1. Update `CHANGELOG.md` with your changes
-2. Increment `$script:TotalTasks` if adding new function
-3. Update `README.md` if adding user-visible features
-4. Test on at least one Windows version
-
-### PR Description Template
-
-```markdown
-## Description
-
-Brief description of changes.
-
-## Type of Change
-
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Documentation update
-- [ ] Performance improvement
-
-## Testing Done
-
-- [ ] Tested on Windows 10/11
-- [ ] Quick scan works
-- [ ] Full scan works
-- [ ] No new errors in log
-
-## Checklist
-
-- [ ] Code follows project style
-- [ ] CHANGELOG.md updated
-- [ ] Documentation updated
+```powershell
+Select-String -Path .\WinFire.ps1 -Pattern 'Get-WmiObject','Get-WinFireSummaryEntry'
 ```
 
-### Review Process
+Expected result: no matches.
 
-1. Maintainers will review within 1-2 weeks
-2. Address any requested changes
-3. Once approved, PR will be merged
+### Help Test
 
-## 📜 Code of Conduct
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\WinFire.ps1 -Help
+```
 
-### Our Standards
+### Runtime Test
 
-- ✅ Be respectful and inclusive
-- ✅ Focus on constructive feedback
-- ✅ Help others learn
-- ✅ Accept responsibility for mistakes
-- ❌ No harassment or discrimination
-- ❌ No personal attacks
+Run from elevated PowerShell:
 
-### Enforcement
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\WinFire.ps1 -Quick -OutputPath .\WinFire_TestRuns -Quiet
+```
 
-Violations may result in:
+Review:
 
-1. Warning
-2. Temporary ban
-3. Permanent ban
+```powershell
+$latest = Get-ChildItem .\WinFire_TestRuns -Directory |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
 
-Report issues to: **sudo3rs@protonmail.com**
+Import-Csv "$($latest.FullName)\Reports\Operation_Metrics.csv" |
+    Where-Object { $_.Status -ne 'Success' }
 
-## 📞 Contact
+Import-Csv "$($latest.FullName)\Raw_Data\Threat_Score.csv" |
+    Format-List
+```
 
-- **GitHub Issues**: [https://github.com/Masriyan/WinFire/issues](https://github.com/Masriyan/WinFire/issues)
-- **Discussions**: [https://github.com/Masriyan/WinFire/discussions](https://github.com/Masriyan/WinFire/discussions)
-- **Email**: sudo3rs@protonmail.com
+Expected:
 
----
+- Script completes.
+- No unexpected failed operations.
+- Raw output files are present.
+- HTML report is generated.
+- Locked live files are warnings or recorded rows, not critical crashes.
 
-**Thank you for contributing to WinFire! 🔥**
+## Pull Request Checklist
+
+- [ ] Code parses in Windows PowerShell 5.1.
+- [ ] No `Get-WmiObject`.
+- [ ] No `Get-WinFireSummaryEntry`.
+- [ ] New functions have `[CmdletBinding()]`.
+- [ ] New collection logic uses `Invoke-WinFireSafeOperation`.
+- [ ] New data is saved through `Save-WinFireData`.
+- [ ] Progress count is updated.
+- [ ] README is updated for user-visible changes.
+- [ ] CHANGELOG is updated.
+- [ ] SECURITY is updated if collection sensitivity changes.
+- [ ] Runtime tested with at least `-Quick`.
+
+## Code of Conduct
+
+- Be respectful and direct.
+- Keep review comments technical and actionable.
+- Do not post private forensic data publicly.
+- Do not submit code that enables unauthorized access, persistence, evasion, or credential theft outside legitimate defensive collection.
+
+## Contact
+
+- Issues: [https://github.com/Masriyan/WinFire/issues](https://github.com/Masriyan/WinFire/issues)
+- Discussions: [https://github.com/Masriyan/WinFire/discussions](https://github.com/Masriyan/WinFire/discussions)
+- Email: sudo3rs@protonmail.com

@@ -1,265 +1,188 @@
-# Security Policy 🔒
+# Security Policy
 
-This document outlines security considerations, vulnerability reporting, and important notices for WinFire users.
+This document covers supported versions, safe use, vulnerability reporting, and data handling for WinFire.
 
-## 📋 Table of Contents
+## Supported Versions
 
-- [Supported Versions](#-supported-versions)
-- [Antivirus Detection](#-antivirus-detection)
-- [Reporting Vulnerabilities](#-reporting-vulnerabilities)
-- [Security Best Practices](#-security-best-practices)
-- [Data Handling](#-data-handling)
-- [Legal Disclaimer](#️-legal-disclaimer)
+| Version | Status | Support |
+| --- | --- | --- |
+| 2.1.0 | Current | Full support and security fixes |
+| 2.0.2 | Legacy | Critical fixes only |
+| 2.0.1 | Legacy | Critical fixes only |
+| 2.0.0 | Legacy | Critical fixes only |
+| 1.0.x | EOL | No support |
 
-## ✅ Supported Versions
+## Expected AV and EDR Detection
 
-| Version | Status     | Support                        |
-| ------- | ---------- | ------------------------------ |
-| 2.0.2   | 🟢 Current | Full support, security updates |
-| 2.0.1   | 🟡 Legacy  | Critical fixes only            |
-| 2.0.0   | 🟡 Legacy  | Critical fixes only            |
-| 1.0.x   | 🔴 EOL     | No support                     |
+WinFire will often trigger antivirus, EDR, XDR, or SOC detections. This is expected because the script performs legitimate forensic actions that overlap with attacker tradecraft:
 
-## 🛡️ Antivirus Detection
+- Enumerates processes, command lines, services, drivers, and scheduled tasks.
+- Reads sensitive registry locations.
+- Collects browser artifacts and user activity traces.
+- Reads event logs and PowerShell history.
+- Checks security tools, Defender exclusions, Sysmon, WDAC, AppLocker, AMSI, and LSA protection.
+- Scans high-risk file system paths and Alternate Data Streams.
+- Enumerates named pipes, WMI subscriptions, and ETW/WMI consumers.
 
-> ⚠️ **WinFire WILL trigger antivirus and EDR alerts. This is expected and normal.**
+Detection does not automatically mean WinFire is malicious. It means the tool is powerful and should be run under formal authorization.
 
-### Why Detection Occurs
+## Safe Deployment
 
-WinFire performs operations that security tools flag as potentially malicious:
+Before running WinFire:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    WHY AV/EDR DETECTS WINFIRE                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  🔍 Registry Access           → Reads persistence keys          │
-│  📊 Process Enumeration       → Gets all process command lines  │
-│  🔐 Credential Artifacts      → Checks LSASS indicators         │
-│  🌐 Network Collection        → Enumerates all connections      │
-│  📁 Browser Data Access       → Copies profile databases        │
-│  📜 Event Log Parsing         → Reads security-sensitive logs   │
-│                                                                 │
-│  These are LEGITIMATE forensic operations, but they match       │
-│  patterns used by threat actors during reconnaissance.          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. Obtain written authorization.
+2. Confirm scope, systems, and data handling requirements.
+3. Coordinate with the SOC or security tool owners.
+4. Verify the script hash and source.
+5. Prepare secure output storage.
+6. Run from an elevated PowerShell session.
 
-### Handling Detection
-
-#### Option 1: Add Exclusion (Recommended)
+If security tooling blocks WinFire, prefer a temporary folder-specific exclusion over disabling protection globally:
 
 ```powershell
-# Add WinFire folder to Windows Defender exclusions
 Add-MpPreference -ExclusionPath "C:\Tools\WinFire"
-
-# Verify exclusion was added
-Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
 ```
 
-#### Option 2: Temporary Disable (Use with Caution)
+If real-time protection must be disabled, document the change and re-enable it immediately after collection:
 
 ```powershell
-# Disable real-time protection temporarily
 Set-MpPreference -DisableRealtimeMonitoring $true
-
-# Run WinFire
-.\WinFire.ps1 -Full -OutputPath "C:\Forensics\Case001"
-
-# IMMEDIATELY re-enable protection
+.\WinFire.ps1 -Quick -OutputPath "C:\Forensics\Case001"
 Set-MpPreference -DisableRealtimeMonitoring $false
 ```
 
-#### Option 3: Enterprise/EDR Environments
+Document security-tool changes in chain-of-custody notes:
 
-Contact your security team to:
-
-1. Whitelist the script hash
-2. Add process exclusion for PowerShell running WinFire
-3. Create approved forensic collection policy
-
-### Document for Chain of Custody
-
-Always record AV handling in your notes:
-
-```
-Chain of Custody Note:
-- Date/Time: 2026-01-29 10:30:00
-- Action: Added Windows Defender exclusion for C:\Tools\WinFire
-- Reason: Enable forensic artifact collection
-- Removed: 2026-01-29 12:00:00 (after collection complete)
+```text
+Date/Time: 2026-05-06 10:30:00
+Action: Added Microsoft Defender exclusion for C:\Tools\WinFire
+Reason: Authorized live forensic collection
+Approved by: Security Operations
+Removed: 2026-05-06 11:15:00
 ```
 
-## 🐛 Reporting Vulnerabilities
+## Data Sensitivity
+
+WinFire output can contain sensitive information.
+
+| Category | Examples | Sensitivity |
+| --- | --- | --- |
+| System | OS, hardware, software, environment variables | Low to Medium |
+| Users | User names, SIDs, profiles, group memberships | Medium |
+| Processes | Command lines, executable paths, owners | High |
+| Network | IP addresses, ports, shares, firewall rules, proxy state | High |
+| Browser | Cookies, history, sessions, profile artifacts where accessible | Very High |
+| Event logs | Logons, privilege use, PowerShell, Defender, Sysmon | High |
+| Security posture | WDAC, AppLocker, AMSI, LSA, BitLocker, TPM | High |
+| Credential indicators | LSASS access and hive-copy indicators | Critical |
+
+Handle results as forensic evidence:
+
+- Store on encrypted media.
+- Restrict access to authorized personnel.
+- Preserve hash manifests.
+- Keep chain-of-custody records.
+- Follow legal hold and retention requirements.
+- Securely delete temporary copies when no longer needed.
+
+## Reporting Vulnerabilities
+
+Do not report security vulnerabilities in public issues.
+
+Email: sudo3rs@protonmail.com
+
+Subject format:
+
+```text
+[SECURITY] Short description
+```
+
+Include:
+
+- Vulnerability description.
+- Affected version.
+- Steps to reproduce.
+- Impact.
+- Suggested fix if available.
+- Whether you want public credit.
 
 ### What to Report
 
-| Report                         | Don't Report              |
-| ------------------------------ | ------------------------- |
-| Code execution vulnerabilities | AV detection (expected)   |
-| Privilege escalation bugs      | Feature requests          |
-| Data exfiltration risks        | General bugs (use Issues) |
-| Authentication bypasses        | Documentation errors      |
+Report:
 
-### Report Process
+- Code execution vulnerabilities.
+- Privilege escalation caused by WinFire code.
+- Unsafe file handling that could overwrite unintended paths.
+- Sensitive data exposure beyond documented collection.
+- Integrity issues in evidence packaging or hash manifests.
 
-1. **DO NOT** open a public GitHub issue
-2. **Email**: sudo3rs@protonmail.com
-3. **Subject**: `[SECURITY] Brief Description`
-4. **Include**:
-   - Vulnerability description
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (optional)
+Do not report as security issues:
+
+- AV/EDR detection of WinFire.
+- Requests for new collection modules.
+- General bugs without security impact.
+- Documentation typos.
 
 ### Response Timeline
 
-| Phase              | Timeframe         |
-| ------------------ | ----------------- |
-| Acknowledgment     | 48 hours          |
-| Initial Assessment | 1 week            |
-| Fix Development    | 2 weeks           |
-| Disclosure         | 30 days after fix |
+| Phase | Target |
+| --- | --- |
+| Acknowledgment | 48 hours |
+| Initial assessment | 7 days |
+| Fix plan | 14 days |
+| Coordinated disclosure | After fix release, usually within 30 days |
 
-### Recognition
-
-Security researchers who responsibly disclose vulnerabilities will be:
-
-- Credited in CHANGELOG.md (unless anonymity requested)
-- Acknowledged in release notes
-- Added to Security Hall of Fame
-
-## 🔐 Security Best Practices
+## Security Best Practices
 
 ### Before Collection
 
-```
-┌──────────────────────────────────────────────────┐
-│           PRE-COLLECTION CHECKLIST               │
-├──────────────────────────────────────────────────┤
-│ □ Obtain written authorization                   │
-│ □ Document system state before collection        │
-│ □ Verify script integrity (hash check)           │
-│ □ Prepare secure storage for output              │
-│ □ Note AV/security tool handling                 │
-└──────────────────────────────────────────────────┘
-```
+- Confirm written authorization.
+- Record target hostname, user, time, and purpose.
+- Verify script integrity.
+- Prepare encrypted evidence storage.
+- Record AV/EDR exclusions or policy changes.
 
 ### During Collection
 
-- Run from dedicated forensic workstation when possible
-- Use case numbers for organization
-- Monitor for collection errors in log
+- Run as Administrator.
+- Use `-Quick` when speed and minimal footprint matter.
+- Use `-ExcludeBrowser` or `-ExcludeNetwork` if scope requires it.
+- Monitor `WinFire_ExecutionLog.txt` and final execution summary.
 
 ### After Collection
 
-```
-┌──────────────────────────────────────────────────┐
-│          POST-COLLECTION CHECKLIST               │
-├──────────────────────────────────────────────────┤
-│ □ Verify Hash_Manifest.txt integrity             │
-│ □ Move output to encrypted storage               │
-│ □ Re-enable any disabled security tools          │
-│ □ Remove any temporary exclusions                │
-│ □ Complete chain of custody documentation        │
-└──────────────────────────────────────────────────┘
-```
+- Review `Reports\Operation_Metrics.csv` for failed operations.
+- Review `Raw_Data\Threat_Score.csv`.
+- Preserve `Reports\Hash_Manifest.txt`.
+- Move results to secure storage.
+- Remove temporary AV/EDR exclusions.
+- Complete chain-of-custody documentation.
 
-## 📦 Data Handling
+## Known Live-System Limitations
 
-### What WinFire Collects
+The following are expected and should not be treated as script compromise:
 
-| Category    | Data Types                    | Sensitivity |
-| ----------- | ----------------------------- | ----------- |
-| System      | OS info, hardware, software   | Low         |
-| Users       | Account names, SIDs, profiles | Medium      |
-| Processes   | Names, PIDs, command lines    | High        |
-| Network     | IPs, ports, connections       | High        |
-| Registry    | Persistence keys, history     | High        |
-| Events      | Security logs, logon events   | High        |
-| Browser     | Profile databases, history    | Very High   |
-| Credentials | LSASS indicators, artifacts   | Critical    |
+- Locked temp files cannot always be hashed.
+- Browser files may be locked while browsers are running.
+- `Amcache.hve` can be locked; WinFire records failure rows instead of failing the scan.
+- `SeBackupPrivilege` and `SeRestorePrivilege` may be disabled even in an elevated session.
+- Sysmon may not be installed.
+- Some systems have no VSS shadow copies.
+- Some named pipe and ADS patterns are benign; v2.1.0 classifies these before scoring.
 
-### Data Protection Requirements
+## Legal Disclaimer
 
-1. **Encrypt at Rest**
-   - Use BitLocker on forensic drives
-   - Store in encrypted containers
-2. **Limit Access**
-   - Need-to-know basis only
-   - Document all access
-3. **Secure Transfer**
-   - Use encrypted channels (SFTP, HTTPS)
-   - Password-protect ZIP files
-4. **Retention**
-   - Follow organizational policies
-   - Legal hold requirements
-   - Securely delete when no longer needed
+WinFire is intended exclusively for authorized digital forensics, incident response, security assessment, and system administration.
 
-### Secure Deletion
+Users are responsible for:
 
-```powershell
-# Securely delete forensic output (Windows)
-cipher /w:C:\Forensics\Case001
+- Authorization.
+- Scope control.
+- Compliance with applicable laws and regulations.
+- Privacy obligations.
+- Data protection.
+- Chain-of-custody documentation.
 
-# Or use SDelete (Sysinternals)
-sdelete -p 3 -s C:\Forensics\Case001
-```
+The software is provided "as is", without warranty of any kind. The authors and contributors are not responsible for unauthorized use, data loss, system damage, operational disruption, or legal consequences.
 
-## ⚖️ Legal Disclaimer
-
-### Authorized Use Only
-
-WinFire is intended **EXCLUSIVELY** for:
-
-- ✅ Digital forensics investigations
-- ✅ Authorized incident response
-- ✅ Security assessments with written permission
-- ✅ System administration on owned systems
-
-### User Responsibilities
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    USER RESPONSIBILITIES                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  📋 AUTHORIZATION                                               │
-│     Obtain proper written authorization before use              │
-│                                                                 │
-│  🎯 SCOPE                                                       │
-│     Only collect from authorized systems                        │
-│                                                                 │
-│  📜 COMPLIANCE                                                  │
-│     Follow applicable laws and regulations                      │
-│     - GDPR (EU)                                                 │
-│     - CCPA (California)                                         │
-│     - HIPAA (Healthcare)                                        │
-│     - PCI-DSS (Payment data)                                    │
-│                                                                 │
-│  🔒 PRIVACY                                                     │
-│     Respect individual privacy rights                           │
-│                                                                 │
-│  📝 DOCUMENTATION                                               │
-│     Maintain chain of custody for legal proceedings            │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Liability
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. The authors and contributors are not responsible for:
-
-- Unauthorized or illegal use
-- Data loss or corruption
-- System damage or downtime
-- Legal consequences of misuse
-
-**Unauthorized use may violate computer crime laws in your jurisdiction.**
-
----
-
-**Questions?** Contact: sudo3rs@protonmail.com
-
-**Repository**: [https://github.com/Masriyan/WinFire](https://github.com/Masriyan/WinFire)
+Repository: [https://github.com/Masriyan/WinFire](https://github.com/Masriyan/WinFire)
